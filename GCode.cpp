@@ -2,8 +2,14 @@
 #include <iostream>
 using namespace std;
 
+void GCode::CaseCapitalize() {
+    for (char& c : command) {
+        c = toupper(c);
+    }
+}
+
 void GCode::execute() {
-    std::string command = GetCommand();;
+    CaseCapitalize();
 
     if (command.substr(0, 3) == "G28") {
         // Run homing routine

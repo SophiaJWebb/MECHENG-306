@@ -10,6 +10,8 @@ class GCode {
     public:
         GCode(const std::string& cmd) : command(cmd) {}
         std::string GetCommand() const { return command; }
+        void SetCommand(const std::string& cmd) { command = cmd; }
+        void CaseCapitalize();
         void execute();
         
         // for testing purposes
