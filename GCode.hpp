@@ -2,20 +2,22 @@
 #define GCODE_H
 
 #include <iostream>
+#include <vector>
 #include <string>
 
-class GCode {
+class GCodeParser{
     private:
         std::string command;
+        int feedrate = 1000; // Default feedrate
+        float parameters[3] = {0.0f, 0.0f, 0.0f}; // X, Y, Z parameters
     public:
-        GCode(const std::string& cmd) : command(cmd) {}
-        std::string GetCommand() const { return command; }
-        void SetCommand(const std::string& cmd) { command = cmd; }
+        GCodeParser();
+        void ExecuteCommand(const std::string& cmd);
         void CaseCapitalize();
         void execute();
-        
-        // for testing purposes
-        void print() const;
+        std::vector<std::string> tokenize(std::string& cmd);
+        void parameterExtraction(std::vector<std::string>& tokens);
+
 };
 
 #endif // GCODE_H
