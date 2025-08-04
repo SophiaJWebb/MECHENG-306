@@ -28,9 +28,12 @@ void setup()
 {
   Serial.begin(9600);
   pinMode(M1, OUTPUT);
-  pinMode(M1HALL1, INPUT);
-  pinMode(M2HALL1, INPUT);
+  pinMode(M1, OUTPUT);
+  pinMode(M1HALL2, INPUT);
+  pinMode(M2HALL2, INPUT);
   attachInterrupt(digitalPinToInterrupt(M1HALL1), M1HALLONE, RISING);
+  attachInterrupt(digitalPinToInterrupt(M2HALL1), M2HALLONE, RISING);
+
 }
 void loop()
 {
