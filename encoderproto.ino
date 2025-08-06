@@ -1,7 +1,15 @@
 //Arduino PWM Speed Control：
 #define DEBUG // Comment out to remove serial
+int VELOCITYDELAY = 1/24; //1/24 of a second try 1/8 if too fast
+int CTCTIMER = VELOCITYDELAY*15624; //Every 1 second 15624 
 double GEARRATIO = 171.79;
 double COUNTTODISTANCERATIO = 65.618946 // For 1mm 65.61 counts are needed
+
+int time = 0;
+
+double m1distancetravelled = 0;
+double m2distancetravelled = 0;
+
 int E1 = 5;
 int M1 = 4;
 int E2 = 6;
@@ -25,12 +33,15 @@ const int CCW  = HIGH;
 const int CW = LOW;
 
 double m1position=0; //in mm
+double m1lastposition=0;
 double m2position=0; //in mm
+double m2lastposition=0;
 
 
 void setup()
 {
   Serial.begin(9600);
+  noInterrupts();           // disable all interrupts
 
   pinMode(M1, OUTPUT);
   pinMode(M2, OUTPUT);
@@ -39,6 +50,18 @@ void setup()
   pinMode(M2HALL2, INPUT);
   attachInterrupt(digitalPinToInterrupt(M1HALL1), M1HALLONE, RISING);
   attachInterrupt(digitalPinToInterrupt(M2HALL1), M2HALLONE, RISING);
+
+  
+  // initialize timer1 
+  TCCR1A = 0;
+  TCCR1B = 0;
+  TCNT1  = 0;
+
+  OCR1A = CTCTIMER;            // 15624 compare match register 16MHz/1024/1Hz
+  TCCR1B |= (1 << WGM12);   // CTC mode
+  TCCR1B |= (1 << CS12) | (0 << CS11) | (1 << CS10); // 1024 prescaler 
+  TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt
+  interrupts();             // enable all interrupts
 
 }
 void loop()
@@ -50,8 +73,6 @@ void loop()
   digitalWrite(M2,m2direction);
   analogWrite(E1, 255); //PWM Speed Control
   analogWrite(E1, 255); //PWM Speed Control
-  m1position=countToDistance(m1count);
-  m2position=countToDistance(m1count);
 
   #ifdef DEBUG
   Serial.print("M1Count: ");
@@ -68,6 +89,15 @@ void loop()
   delay(10);  
   #endif // Debug
   }
+}
+
+ISR(TIMER1_COMPA_vect)
+{
+  time += VELOCITYDELAY;
+  m1distancetravelled=m1position-m1lastposition;
+  m2distancetravelled=m2position-m2lastposition;
+  m1velocity=m1distancetravelled/VELOCITYDELAY;
+  m2velocity=m2distancetravelled/VELOCITYDELAY;
 }
 
 double countToDistance(int count)
@@ -87,6 +117,7 @@ void m1counting()
   } else{
     m1count--;
   }
+  m1position=countToDistance(m1count);
 }
 
 void m2counting()
@@ -96,6 +127,7 @@ void m2counting()
   } else{
     m2count--;
   }
+  m2position=countToDistance(m1count);
 }
 
 void M1HALLONE()
