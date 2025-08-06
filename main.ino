@@ -31,6 +31,7 @@ int main() {
     while (running) {
         switch (currentState) {
             case IDLE: {
+                cout << "Enter GCode command: ";
                 std::getline(std::cin, command);
                 int State = Parser.ExecuteCommand(command);
                 if (State == 1) {
