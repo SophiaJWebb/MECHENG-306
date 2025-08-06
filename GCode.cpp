@@ -60,6 +60,10 @@ void GCodeParser::parameterExtraction(std::vector<std::string>& tokens) {
                 string fValue = token.substr(1);
                 parameters[2] = std::stof(fValue);
             }
+            } else if (token[0] == ';') {
+                // Ignore comments
+                continue;
+            }
             else{
                 std::cout << "Unknown parameter: " << token << std::endl;
                 return;
