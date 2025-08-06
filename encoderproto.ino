@@ -9,6 +9,8 @@ int time = 0;
 
 double m1distancetravelled = 0;
 double m2distancetravelled = 0;
+double m1velocity;
+double m2velocity;
 
 int E1 = 5;
 int M1 = 4;
@@ -17,8 +19,8 @@ int M2 = 7;
 
 int M1HALL1 = 2;
 int M2HALL1 = 3;
-// int M1HALL2 = 10; TBC
-// int M2HALL2 = 11; TBC
+int M1HALL2 = 10; //TBC
+int M2HALL2 = 11; //TBC
 
 int long m1count = 0;
 int long m2count = 0;
@@ -66,17 +68,20 @@ void setup()
 }
 void loop()
 {
-  value= 255;
+  int value= 50;
   m1direction=CW;
   m2direction=CW;
   digitalWrite(M1,m1direction);
   digitalWrite(M2,m2direction);
-  analogWrite(E1, 255); //PWM Speed Control
-  analogWrite(E1, 255); //PWM Speed Control
+  analogWrite(E1, value); //PWM Speed Control
+  analogWrite(E1, value); //PWM Speed Control
 
   #ifdef DEBUG
   Serial.print("M1Count: ");
   Serial.print(m1position);
+  Serial.print(" ");
+  Serial.print("M1Speed: ");
+  Serial.print(m1velocity);
   Serial.print(" ");
   Serial.print("M1Direction: ");
   Serial.println(m1positive);
@@ -84,9 +89,12 @@ void loop()
   Serial.print("M2Count: ");
   Serial.print(m2position);
   Serial.print(" ");
+  Serial.print("M2Speed: ");
+  Serial.print(m2velocity);
+  Serial.print(" ");
   Serial.print("M2Direction: ");
   Serial.println(m2positive);
-  delay(10);  
+  delay(100);  
   #endif // Debug
   }
 }
