@@ -49,11 +49,20 @@ int main() {
 
             case MOVING: {
                 parameters = Parser.GetParameters();
-                change_in_x = parameters[0] - absolute_x;
-                change_in_y = parameters[1] - absolute_y;
+                change_in_x = parameters[0];
+                change_in_y = parameters[1];
+                bool valid = Parser.ValidateParameters(absolute_x, absolute_y);
+                if (!valid) {
+                    std::cout << "Invalid parameters entered: board limits exceeded." << std::endl;
+                    currentState = IDLE; // Switch to error state
+                    break;
+                }
+                else {
                 cout << "Moving: " << endl;
                 // run move function 
                 currentState = IDLE; // Reset to IDLE after moving
+                break;
+                }
                 break;
             }  
             case ERROR: {
