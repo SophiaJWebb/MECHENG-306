@@ -16,4 +16,13 @@ enum state {
   CALIBRATION
 };
 
+//motor set up 
+int E1 = 5;
+int M1 = 4;
+int E2 = 6;
+int M2 = 7;
+
+const int CCW  = HIGH;
+const int CW = LOW;
+
 #endif 
