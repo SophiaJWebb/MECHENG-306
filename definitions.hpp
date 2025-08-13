@@ -25,4 +25,21 @@ int M2 = 7;
 const int CCW  = HIGH;
 const int CW = LOW;
 
+//GCode
+class GCodeParser {
+  private:
+    String command;
+    int feedrate = 1000; // Default feedrate
+    float parameters[3] = {0.0f, 0.0f, 0.0f}; // X, Y, Z parameters
+
+  public:
+    GCodeParser();
+    int ExecuteCommand(const String& cmd);
+    void CaseCapitalize();
+    void execute();
+    void tokenize(const String& cmd, String tokens[], int& tokenCount);
+    int parameterExtraction(String tokens[], int tokenCount);
+    const float* GetParameters() const { return parameters; }
+    bool ValidateParameters(float currentX, float currentY);
+};
 #endif 

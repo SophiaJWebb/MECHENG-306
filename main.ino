@@ -41,8 +41,19 @@ void loop() {
   while (1) {
     switch (STATE) {
       case IDLE: {
-        // Wait for command
+        Serial.println("State Idle");
+        Serial.println("Enter GCode command");
+        while (Serial.available() == 0){
+        }
+        command = Serial.readStringUntil('\n');  // Read until newline
+        int State = Parser.ExecuteCommand(command.c_str());
+        if (State == 1) {
+          currentState = HOMING;
+        } else if (State == 2) {
+          currentState = MOVING;
+        }
         break;
+    }
       }
       case HOMING: {
         // Run homing routine
