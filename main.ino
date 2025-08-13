@@ -1,8 +1,4 @@
 #include "GCode.hpp"
-//#include encoder 
-//#include
-#include <iostream>
-using namespace std;
 
 #define IDLE 0
 #define HOMING 1
@@ -10,69 +6,74 @@ using namespace std;
 #define ERROR 3
 #define CALIBRATION 4
 
-void setup() {
-  //Serial.begin(9600);
+GCodeParser Parser;
 
+int currentState = IDLE;
+float absolute_x = -1;
+float absolute_y = -1;
+float change_in_x = 0;
+float change_in_y = 0;
+String command;  // Arduino String type
+const float* parameters = nullptr;
+
+void setup() {
+  Serial.begin(9600);
+  while (!Serial) {
+    ; // Wait for Serial to connect
+  }
+  //Serial.println("Ready for GCode commands...");
 }
 
-int main() {
-    // Read buttons (active LOW)
-    GCodeParser Parser;
-    bool running = true;
-    int currentState = IDLE;
-  
-    float absolute_x = -1;
-    float absolute_y = -1;
-    float change_in_x = 0;
-    float change_in_y = 0;
-    string command;
-    const float* parameters = nullptr;
-
-    while (running) {
-        switch (currentState) {
-            case IDLE: {
-                cout << "Enter GCode command: ";
-                std::getline(std::cin, command);
-                int State = Parser.ExecuteCommand(command);
-                if (State == 1) {
-                    currentState = HOMING;
-                } else if (State == 2) {
-                    currentState = MOVING;
-                }
-                break;
-            }
-            case HOMING: {
-                std::cout << "Homing in progress..." << std::endl;
-                currentState = IDLE; // Reset to IDLE after homing 
-                break;
-            }
-
-            case MOVING: {
-                parameters = Parser.GetParameters();
-                change_in_x = parameters[0];
-                change_in_y = parameters[1];
-                bool valid = Parser.ValidateParameters(absolute_x, absolute_y);
-                if (!valid) {
-                    std::cout << "Invalid parameters entered: board limits exceeded." << std::endl;
-                    currentState = IDLE; // Switch to error state
-                    break;
-                }
-                else {
-                cout << "Moving: " << endl;
-                // run move function 
-                currentState = IDLE; // Reset to IDLE after moving
-                break;
-                }
-                break;
-            }  
-            case ERROR: {
-                std::cout << "Error occurred." << std::endl;
-                break;
-            }
-            case CALIBRATION: {
-                std::cout << "Calibration in progress..." << std::endl;
-                break;
-            }
+void loop() {
+  switch (currentState) {
+    case IDLE: {
+      Serial.println("State Idle");
+      while (Serial.available() > 0){
+        //Serial.println("Enter GCode command");
+        command = Serial.readStringUntil('\n');  // Read until newline
+        int State = Parser.ExecuteCommand(command.c_str());
+        if (State == 1) {
+          currentState = HOMING;
+        } else if (State == 2) {
+          currentState = MOVING;
         }
+        break;
+      }
     }
+
+    case HOMING: {
+      Serial.println("State Idle");
+      //Serial.println("Homing in progress...");
+      currentState = IDLE; // Reset to IDLE after homing
+      break;
+    }
+
+    case MOVING: {
+      parameters = Parser.GetParameters();
+      change_in_x = parameters[0];
+      change_in_y = parameters[1];
+      bool valid = Parser.ValidateParameters(absolute_x, absolute_y);
+      if (!valid) {
+        Serial.println("Invalid parameters entered: board limits exceeded.");
+        currentState = IDLE; // Switch to error state
+      } else {
+        Serial.println("Moving...");
+        // Run move function here
+        currentState = IDLE; // Reset to IDLE after moving
+      }
+      break;
+    }
+
+    case ERROR: {
+      Serial.println("Error occurred.");
+      currentState = IDLE;
+      break;
+    }
+
+    case CALIBRATION: {
+      Serial.println("Calibration in progress...");
+      currentState = IDLE;
+      break;
+    }
+  }
 }
