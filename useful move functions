@@ -1,0 +1,35 @@
+
+void move_top(int PWM)
+{
+    digitalWrite(M1,CW);
+    digitalWrite(M2,CCW);
+    analogWrite(E1, PWM); //PWM Speed Control
+    analogWrite(E2, PWM); //PWM Speed Control
+}
+
+
+void move_bot(int PWM)
+{
+    digitalWrite(M1,CCW);
+    digitalWrite(M2,CW);
+    analogWrite(E1, PWM); //PWM Speed Control
+    analogWrite(E2, PWM); //PWM Speed Control
+}
+
+
+void move_left(int PWM)
+{
+    digitalWrite(M1,CCW);
+    digitalWrite(M2,CCW);
+    analogWrite(E1, PWM); //PWM Speed Control
+    analogWrite(E2, PWM); //PWM Speed Control
+}
+
+
+void move_right(int PWM)
+{
+    digitalWrite(M1,CW);
+    digitalWrite(M2,CW);
+    analogWrite(E1, PWM); //PWM Speed Control
+    analogWrite(E2, PWM); //PWM Speed Control
+}
