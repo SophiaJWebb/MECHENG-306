@@ -1,5 +1,5 @@
 // Velocity Profile Demo (Arduino IDE compatible)
-// - Moves along a straight line from (Xi, Yi) to (Xf, Yf)
+// - Moves along a straight line to (Xf, Yf)
 // - Generates trapezoidal or triangular speed profile based on distance
 // - Prints CSV: t,speed,vx,vy  (units follow your inputs)
 
@@ -7,8 +7,6 @@
 #include <math.h>
 
 // ---------- CONFIGURE THESE ----------
-const float Xi = 0.0f;
-const float Yi = 0.0f;
 const float Xf = 10.0f;
 const float Yf = 0.0f;
 
@@ -52,8 +50,8 @@ float speedAtTime(float t) {
 
 void computeProfile() {
   // Geometry
-  const float dx = Xf - Xi;
-  const float dy = Yf - Yi;
+  const float dx = Xf;
+  const float dy = Yf;
   const float distance_total = sqrtf(dx * dx + dy * dy);
 
   if (distance_total <= 1e-6f) {
@@ -119,10 +117,12 @@ void setup() {
 
   // Stream the profile at fixed dt
   // (You can replace this loop with real-time control output if desired.)
+  int long count = 0;
   for (float t = 0.0f; t <= params.total_time + 1e-6f; t += dt) {
+    count++;
     float speed = speedAtTime(t);
-    float vx = speed * params.ux;
-    float vy = speed * params.uy;
+    float vx[count] = speed * params.ux;
+    float vy[count] = speed * params.uy;
 
     Serial.print(t, 3);      Serial.print(',');
     Serial.print(speed, 3);  Serial.print(',');
@@ -134,3 +134,4 @@ void setup() {
 void loop() {
   // Nothing to do repeatedly; all results printed in setup().
 }
+
