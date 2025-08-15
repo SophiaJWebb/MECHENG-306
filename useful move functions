@@ -33,3 +33,50 @@ void move_right(int PWM)
     analogWrite(E1, PWM); //PWM Speed Control
     analogWrite(E2, PWM); //PWM Speed Control
 }
+
+void move_top_500(int PWM)
+{
+    digitalWrite(M1,CW);
+    digitalWrite(M2,CCW);
+    analogWrite(E1, PWM); //PWM Speed Control
+    analogWrite(E2, PWM); //PWM Speed Control
+    delay(500);
+    analogWrite(E1, 0); //PWM Speed Control
+    analogWrite(E2, 0); //PWM Speed Control
+}
+
+
+void move_bot_500(int PWM)
+{
+    digitalWrite(M1,CCW);
+    digitalWrite(M2,CW);
+    analogWrite(E1, PWM); //PWM Speed Control
+    analogWrite(E2, PWM); //PWM Speed Control
+    delay(500);
+    analogWrite(E1, 0); //PWM Speed Control
+    analogWrite(E2, 0); //PWM Speed Control
+}
+
+
+void move_left_500(int PWM)
+{
+    digitalWrite(M1,CCW);
+    digitalWrite(M2,CCW);
+    analogWrite(E1, PWM); //PWM Speed Control
+    analogWrite(E2, PWM); //PWM Speed Control
+    delay(500);
+    analogWrite(E1, 0); //PWM Speed Control
+    analogWrite(E2, 0); //PWM Speed Control
+}
+
+
+void move_right_500(int PWM)
+{
+    digitalWrite(M1,CW);
+    digitalWrite(M2,CW);
+    analogWrite(E1, PWM); //PWM Speed Control
+    analogWrite(E2, PWM); //PWM Speed Control
+    delay(500);
+    analogWrite(E1, 0); //PWM Speed Control
+    analogWrite(E2, 0); //PWM Speed Control
+}
