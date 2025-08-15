@@ -57,7 +57,18 @@ int GCodeParser::parameterExtraction(String tokens[], int tokenCount) {
                 parameters[1] = token.substring(1).toFloat();
             } 
             else if (token.charAt(0) == 'F') {
-                parameters[2] = token.substring(1).toFloat();
+                int speed = token.substring(1).toFloat();
+                if (speed == 0){
+                    Serial.print("Invalid speed entry: "); Serial.print(tokens[i]);
+                }
+                
+                if (speed < 3000){
+                    parameters[2] = speed;
+                }
+                else {
+                    parameters[2] = 3000;
+                }
+                
             } 
             else if (token.charAt(0) == ';') {
                 continue; // ignore comment
