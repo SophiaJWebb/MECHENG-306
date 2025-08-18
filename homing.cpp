@@ -59,3 +59,16 @@ Homing() {
   }
   hit = false;
 }
+
+//void TOP_ISR() {
+//   if (!hit){
+//     analogWrite(E1, 0); //PWM Speed Control
+//     analogWrite(E2, 0);
+//   }
+//   hit = true;
+//   top_now = millis();
+//   if (top_now - top_last_time > DEBOUNCE_DELAY_MS) {
+//     Serial.println("Top limit switch hit");
+//   }
+//   top_last_time = millis();
+// }
