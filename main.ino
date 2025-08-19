@@ -14,6 +14,9 @@ int long bottom_now = 0;
 bool m1direction=HIGH;
 bool m2direction=HIGH;
 
+float currentX;
+float currentY;
+
 enum state STATE = IDLE;
 bool error_running = false; // Global variable for the limit switch being triggered while NOT in calibration phase
 // Global varibale for the limit switch being triggered while in calibration phase
@@ -43,16 +46,40 @@ void setup()
 
 void loop() {
     while (1) {
+    String command;
     switch (STATE) {
       case IDLE: {
         Serial.println("State Idle");
         Serial.println("Enter GCode command");
         while (Serial.available() == 0){
         }
-        String command = Serial.readStringUntil('\n');  // Read until newline
-        STATE = Parser.ExecuteCommand(command.c_str());
+        command = Serial.readStringUntil('\n');  // Read until newline
+        STATE = PARSING;
         break;
       }
+
+      case PARSING: {
+        int state = Parser.ExecuteCommand(command.c_str());
+        if (state == 0){
+          STATE = IDLE;
+          break;
+        }
+        if (state == 1){
+          STATE = HOMING;
+          break;
+        }
+        if (state == 2){
+          if (Parser.ValidateParameters(currentX, currentY)){
+            STATE = MOVING;
+          }
+          else {
+            STATE = IDLE;
+          }
+          break;
+        }
+        break;
+      }
+      
       case HOMING: {
         // Run homing routine
         Serial.println("Running homing routine");

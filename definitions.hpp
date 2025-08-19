@@ -10,6 +10,7 @@
 
 enum state {
   IDLE,
+  PARSING,
   HOMING,
   MOVING,
   ERROR,

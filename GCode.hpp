@@ -8,18 +8,19 @@ class GCodeParser {
     String command;
     int feedrate = 1000; // Default feedrate
     float parameters[3] = {0.0f, 0.0f, 0.0f}; // X, Y, Z parameters
+    float previousFeedrate = 0;
+    bool invalidCommand = false;
 
   public:
     GCodeParser();
 
     int ExecuteCommand(const String& cmd);
     void CaseCapitalize();
-    void execute();
-    // If you don't have std::vector, you can return an array or work directly on the String
     void tokenize(const String& cmd, String tokens[], int& tokenCount);
-    int parameterExtraction(String tokens[], int tokenCount);
+    int extractCommand(String tokens[], int tokenCount);
+    void extractParameters(String tokens[], int tokenCount);
+    bool ValidateParameters(float currentX, float currentY, float speed);
     const float* GetParameters() const { return parameters; }
-    bool ValidateParameters(float currentX, float currentY);
 };
 
 #endif // GCODE_H
