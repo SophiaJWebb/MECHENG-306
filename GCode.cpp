@@ -11,8 +11,8 @@ int GCodeParser::ExecuteCommand(const String& cmd) {
     command = cmd;
     String tokens[10]; // fixed-size array for tokens
     int tokenCount = 0;
-    tokenize(command, tokens, tokenCount);
     CaseCapitalize();
+    tokenize(command, tokens, tokenCount);
     return parameterExtraction(tokens, tokenCount);
 }
 
