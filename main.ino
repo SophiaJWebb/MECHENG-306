@@ -1,21 +1,8 @@
 #include "GCode.hpp"
 #include "definitions.hpp"
 
-int long left_last_time = 0;
-int long left_now = 0;
-int long top_last_time = 0;
-int long top_now = 0;
-
-int long right_last_time = 0;
-int long right_now = 0;
-int long bottom_last_time = 0;
-int long bottom_now = 0;
-
 bool m1direction=HIGH;
 bool m2direction=HIGH;
-
-float currentX;
-float currentY;
 
 enum state STATE = IDLE;
 bool error_running = false; // Global variable for the limit switch being triggered while NOT in calibration phase
@@ -227,3 +214,4 @@ void bottom_limit_switch_hit() {
   }
   bottom_last_time = bottom_now;
 }
+
