@@ -26,21 +26,25 @@ int M2 = 7;
 const int CCW  = HIGH;
 const int CW = LOW;
 
-//GCode
-class GCodeParser {
-  private:
-    String command;
-    int feedrate = 1000; // Default feedrate
-    float parameters[3] = {0.0f, 0.0f, 0.0f}; // X, Y, Z parameters
+// limit switches 
+bool left_hit = false;
+bool right_hit = false;
+bool top_hit = false;
+bool bottom_hit = false;
 
-  public:
-    GCodeParser();
-    int ExecuteCommand(const String& cmd);
-    void CaseCapitalize();
-    void execute();
-    void tokenize(const String& cmd, String tokens[], int& tokenCount);
-    int parameterExtraction(String tokens[], int tokenCount);
-    const float* GetParameters() const { return parameters; }
-    bool ValidateParameters(float currentX, float currentY);
-};
+//limit switch debouncing 
+int long left_last_time = 0;
+int long left_now = 0;
+int long top_last_time = 0;
+int long top_now = 0;
+
+int long right_last_time = 0;
+int long right_now = 0;
+int long bottom_last_time = 0;
+int long bottom_now = 0;
+
+// abosulte x and y position in mm
+float currentX;
+float currentY;
+
 #endif 
