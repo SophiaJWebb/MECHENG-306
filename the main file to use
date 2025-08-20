@@ -76,6 +76,9 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(RIGHT_INTERRUPT_PIN), right_limit_switch_hit, RISING);
   attachInterrupt(digitalPinToInterrupt(TOP_INTERRUPT_PIN), top_limit_switch_hit, RISING);
   attachInterrupt(digitalPinToInterrupt(BOTTOM_INTERRUPT_PIN), bottom_limit_switch_hit, RISING);
+
+  attachInterrupt(digitalPinToInterrupt(RENCA), RENCA_ISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(LENCA), LENCA_ISR, RISING);
 }
 
 void loop() {
@@ -156,7 +159,7 @@ void RENCA_ISR()
 }
 
 // Check what LENCB is (0/1) when LENCA triggers the external interrupt on pin 11
-void M2HALLONE()
+void LENCA_ISR()
 {
     LDIRECTION = digitalRead(LENCB) ? CCW : CW;
     
