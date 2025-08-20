@@ -1,6 +1,7 @@
 #include "GCode.hpp"
 #include <Arduino.h>
 
+
 GCodeParser::GCodeParser() {}
 
 void GCodeParser::CaseCapitalize() {
@@ -93,9 +94,14 @@ bool GCodeParser::ValidateParameters(float currentX, float currentY) {
         Serial.println("Distance entered exceeds limits");
         invalidCommand = true;
     }
+    if ((parameters[0] == 0) & (parameters[1] == 0)){
+        invalidCommand = true;
+        Serial.println("Neither X or Y distances entered");
+    }
+
     // validate speed 
     if (parameters[2] == 0){
-        Serial.print("Invalid speed entry: "); Serial.print(tokens[i]);
+        Serial.print("Invalid speed entry: "); Serial.print(parameters[2]);
         parameters[2] = previousFeedrate; //return feedrate to old one
         invalidCommand = true;
     }
@@ -103,6 +109,13 @@ bool GCodeParser::ValidateParameters(float currentX, float currentY) {
     if (parameters[2] > 3000){
         parameters[2] = 3000;
     }
+    Serial.print("X: ");
+    Serial.println(parameters[0]);
+    Serial.print("Y: ");
+    Serial.println(parameters[1]);
+    Serial.print("F: ");
+    Serial.println(parameters[2]);
+
     if (invalidCommand){
         return false;
     }
