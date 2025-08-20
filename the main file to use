@@ -1,0 +1,205 @@
+#define DEBOUNCE_DELAY_MS 500
+
+#define LEFT_INTERRUPT_PIN 18
+#define RIGHT_INTERRUPT_PIN 19
+#define TOP_INTERRUPT_PIN 21
+#define BOTTOM_INTERRUPT_PIN 20
+
+//motor set up 
+#define E1 5
+#define M1 4
+#define E2 6
+#define M2 7
+
+// Encoder setup
+#define RENCA 3
+#define RENCB 2
+#define LENCB 10
+#define LENCA 11
+
+double VELOCITYDELAY = 1; //1/24 of a second try 1/8 if too fast
+int CTCTIMER = VELOCITYDELAY*15624; //Every 1 second 15624 
+double GEARRATIO = 171.79;
+double COUNTTODISTANCERATIO = 65.618946; // For 1mm 65.61 counts are needed
+
+// limit switches 
+bool left_hit = false;
+bool right_hit = false;
+bool top_hit = false;
+bool bottom_hit = false;
+
+//limit switch debouncing 
+int long left_last_time = 0;
+int long left_now = 0;
+int long top_last_time = 0;
+int long top_now = 0;
+
+int long right_last_time = 0;
+int long right_now = 0;
+int long bottom_last_time = 0;
+int long bottom_now = 0;
+
+int long m1count = 0;
+int long m2count = 0;
+
+float m1position_absolute = 0;
+float m2position_absolute = 0;
+
+//  Guess CW is when ENCB = LOW and CCW is when ENCB = HIGH
+enum direction {
+  CW,
+  CCW
+};
+
+enum state {
+  IDLE,
+  PARSING,
+  HOMING,
+  MOVING,
+  ERROR,
+  CALIBRATION
+};
+
+enum direction LDIRECTION = CCW;
+enum direction RDIRECTION = CCW;
+
+enum state STATE = IDLE;
+
+void setup() {
+  pinMode(LEFT_INTERRUPT_PIN, INPUT);
+  pinMode(RIGHT_INTERRUPT_PIN, INPUT);
+  pinMode(TOP_INTERRUPT_PIN, INPUT);
+  pinMode(BOTTOM_INTERRUPT_PIN, INPUT);
+
+  Serial.begin(9600);
+  attachInterrupt(digitalPinToInterrupt(LEFT_INTERRUPT_PIN), left_limit_switch_hit, RISING);
+  attachInterrupt(digitalPinToInterrupt(RIGHT_INTERRUPT_PIN), right_limit_switch_hit, RISING);
+  attachInterrupt(digitalPinToInterrupt(TOP_INTERRUPT_PIN), top_limit_switch_hit, RISING);
+  attachInterrupt(digitalPinToInterrupt(BOTTOM_INTERRUPT_PIN), bottom_limit_switch_hit, RISING);
+}
+
+void loop() {
+    while (1) {
+      switch (STATE) {
+        case IDLE: {
+          break;
+        }
+
+        case PARSING: {
+          break;
+        }
+        
+        case HOMING: {
+          break;
+        }
+
+        case MOVING: {
+          break;
+        }
+
+        case ERROR: {
+          break;
+        }
+      }
+  }
+}
+
+void m1counting()
+{
+    m1count = RDIRECTION ? m1count + 1 : m1count - 1;
+
+    m1position_absolute = countToDistance(m1count);
+}
+
+void m2counting()
+{
+    m2count = LDIRECTION ? m2count + 1 : m2count - 1;
+
+    m2position_absolute = countToDistance(m2count);
+}
+
+// Check what RENCB is (0/1) when RENCA triggers the external interrupt on pin 3
+void RENCA_ISR()
+{
+    RDIRECTION = digitalRead(RENCB) ? CCW : CW;
+
+    m1counting();
+}
+
+// Check what LENCB is (0/1) when LENCA triggers the external interrupt on pin 11
+void M2HALLONE()
+{
+    LDIRECTION = digitalRead(LENCB) ? CCW : CW;
+    
+    m2counting();
+}
+
+double countToDistance(int count)
+{
+  return (count/COUNTTODISTANCERATIO);
+}
+
+int distanceToCount(float distance)
+{
+  return ((int)distance*COUNTTODISTANCERATIO);
+}
+
+void left_limit_switch_hit() {
+  left_now = millis();
+  if (left_now - left_last_time > DEBOUNCE_DELAY_MS) {
+    Serial.println("Left limit switch hit");
+    left_hit = true;
+    // Stop motors
+    analogWrite(E1, 0);
+    analogWrite(E2, 0);
+  }
+  left_last_time = left_now;
+}
+
+void right_limit_switch_hit() {
+  right_now = millis();
+  if (right_now - right_last_time > DEBOUNCE_DELAY_MS) {
+    Serial.println("Right limit switch hit");
+    right_hit = true;
+
+    // Stop motors
+    analogWrite(E1, 0);
+    analogWrite(E2, 0);
+  }
+  right_last_time = right_now;
+
+  right_hit = true;
+
+  // Stop motors
+  analogWrite(E1, 0);
+  analogWrite(E2, 0);
+}
+
+void top_limit_switch_hit() {
+  top_now = millis();
+  if(top_now - top_last_time > DEBOUNCE_DELAY_MS) {
+    Serial.println("Top limit switch hit");
+    top_hit = true;
+
+    // Stop motors
+    analogWrite(E1, 0);
+    analogWrite(E2, 0);
+
+  }
+  top_last_time = top_now;
+
+  top_hit = true;
+}
+
+void bottom_limit_switch_hit() {
+  bottom_now = millis();
+  if (bottom_now - bottom_last_time > DEBOUNCE_DELAY_MS) {
+    Serial.println("Bottom limit switch hit");
+    //Serial.println(bottom_hit);
+    bottom_hit = true;
+    // Stop motors
+    analogWrite(E1, 0);
+    analogWrite(E2, 0);
+  }
+  bottom_last_time = bottom_now;
+}
