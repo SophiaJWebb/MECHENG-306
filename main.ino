@@ -1,3 +1,5 @@
+#include "GCode.hpp"
+#define LIMIT_SWITCH
 #define DEBOUNCE_DELAY_MS 500
 
 #define LEFT_INTERRUPT_PIN 18
@@ -6,16 +8,20 @@
 #define BOTTOM_INTERRUPT_PIN 20
 
 //motor set up 
-#define E1 5
-#define M1 4
-#define E2 6
-#define M2 7
+#define E2 5
+#define M2 4 // Right
+#define E1 6
+#define M1 7 // Left
 
 // Encoder setup
 #define RENCA 3
 #define RENCB 2
 #define LENCB 10
 #define LENCA 11
+
+float K_p = 0;
+float K_i = 0;
+float K_d = 0;
 
 double VELOCITYDELAY = 1; //1/24 of a second try 1/8 if too fast
 int CTCTIMER = VELOCITYDELAY*15624; //Every 1 second 15624 
@@ -39,11 +45,35 @@ int long right_now = 0;
 int long bottom_last_time = 0;
 int long bottom_now = 0;
 
-int long m1count = 0;
-int long m2count = 0;
+// These all change during moving or homing command
+// %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-float m1position_absolute = 0;
-float m2position_absolute = 0;
+// These variables only change during moving command only and is reset to 0 each time the moving command is run
+// ***************************************************
+// Relative distance moved from start of moving command (use for PID control)
+float delta_A_rel = 0;
+float delta_B_rel = 0;
+
+int long delta_A_count_rel = 0;
+int long delta_B_count_rel = 0;
+// ****************************************************
+
+int long delta_A_count = 0;
+int long delta_B_count = 0;
+
+//Delta A is left motor, delta B is right motor
+float delta_A_position_absolute = 0;
+float delta_B_position_absolute = 0;
+
+float currentX = 0;
+float currentY = 0;
+
+// %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+float delta_A_ref = 0;
+float delta_B_ref = 0;
+
+GCodeParser Parser;
 
 //  Guess CW is when ENCB = LOW and CCW is when ENCB = HIGH
 enum direction {
@@ -82,72 +112,90 @@ void setup() {
 }
 
 void loop() {
-    String command;
-    while (1) {
-    switch (STATE) {
-      case IDLE: {
-        Serial.println("State Idle");
-        Serial.println("Enter GCode command");
-        while (Serial.available() == 0){
-        }
-        command = Serial.readStringUntil('\n');  // Read until newline
-        STATE = PARSING;
+  String command;
+  // Put homing command here to run before anything happens (on boot up)
+  Homing();
+
+  while (1) {
+  switch (STATE) {
+    case IDLE: {
+      Serial.println("State Idle");
+      Serial.println("Enter GCode command");
+      while (Serial.available() == 0){
+      }
+      command = Serial.readStringUntil('\n');  // Read until newline
+      STATE = PARSING;
+      break;
+    }
+
+    case PARSING: {
+      int state = Parser.ExecuteCommand(command.c_str());
+      if (state == 0){
+        STATE = IDLE;
         break;
       }
-
-      case PARSING: {
-        int state = Parser.ExecuteCommand(command.c_str());
-        if (state == 0){
+      if (state == 1){
+        STATE = HOMING;
+        break;
+      }
+      if (state == 2){
+        if (Parser.ValidateParameters(currentX, currentY)){
+          STATE = MOVING;
+        }
+        else {
           STATE = IDLE;
-          break;
-        }
-        if (state == 1){
-          STATE = HOMING;
-          break;
-        }
-        if (state == 2){
-          if (Parser.ValidateParameters(currentX, currentY)){
-            STATE = MOVING;
-          }
-          else {
-            STATE = IDLE;
-          }
-          break;
         }
         break;
       }
-      
-      case HOMING: {
-        // Run homing routine
-        Serial.println("Running homing routine");
-        STATE = IDLE;
-        break;
-      }
-      case MOVING: {
-        Serial.println("Running moving routine");
-        STATE = IDLE;
-        break;
-      }
+      break;
+    }
+    
+    case HOMING: {
+      // Run homing routine
+      Serial.println("Running homing routine");
+      STATE = IDLE;
+      break;
+    }
+    case MOVING: {
+      Serial.println("Running moving routine");
+      // Find the delta A (left motor) and delta B (right motor) as the inputs to PID function
+      delta_A_ref = inputs_to_encoder_count_delta_A(Parser.GetParameters()[0], Parser.GetParameters()[1]);
+      delta_B_ref = inputs_to_encoder_count_delta_B(Parser.GetParameters()[0], Parser.GetParameters()[1]);
 
-        case ERROR: {
-          break;
-        }
+
+      STATE = IDLE;
+      break;
+    }
+
+      case ERROR: {
+        break;
       }
+    }
   }
+}
+
+// Function to tell how much to move delta A (in mm) which is the left motor
+float inputs_to_encoder_count_delta_A(float delta_X, float delta_Y) {
+  return (delta_X + delta_Y);
+}
+
+// Function to tell how much to move delta B (in mm) which is the right motor
+float inputs_to_encoder_count_delta_B(float delta_X, float delta_Y) {
+  return (delta_X - delta_Y);
 }
 
 void m1counting()
 {
-    m1count = RDIRECTION ? m1count + 1 : m1count - 1;
+    delta_A_count_rel = RDIRECTION ? delta_A_count + 1 : delta_A_count - 1;
 
-    m1position_absolute = countToDistance(m1count);
+    delta_A_rel = countToDistance(delta_A_count_rel);
 }
 
 void m2counting()
 {
-    m2count = LDIRECTION ? m2count + 1 : m2count - 1;
+    delta_B_count_rel = LDIRECTION ? delta_B_count + 1 :delta_B_count - 1;
 
-    m2position_absolute = countToDistance(m2count);
+    delta_B_rel = countToDistance(delta_B_count_rel);
 }
 
 // Check what RENCB is (0/1) when RENCA triggers the external interrupt on pin 3
@@ -176,14 +224,24 @@ int distanceToCount(float distance)
   return ((int)distance*COUNTTODISTANCERATIO);
 }
 
+// Testing for just distance in one axis
+void PID_control(float delta_A_ref_in, float delta_B_ref_in) {
+  bool running = true;
+  // Reset the relative encoder counts
+  delta_A_count_rel = 0;
+  delta_B_count_rel = 0;
+
+  delta_A_direction = (delta_A_ref <= 0) ? 1 : 0; // CCW (1) or CW (0)
+  delta_B_direction = (delta_B_ref <= 0) ? 1 : 0;
+
+  while (running) {
+    
+  }
+}
+
 void left_limit_switch_hit() {
   left_now = millis();
   if (left_now - left_last_time > DEBOUNCE_DELAY_MS) {
-    if (STATE != HOMING) {
-      error_running = true; // Flag to change state to ERROR
-    } else {
-      left_limit_calibration = true; // Flag to tell when switch has been hit while in calibration
-    }
     Serial.println("Left limit switch hit");
     if (!left_hit){
       analogWrite(E1, 0);
@@ -197,11 +255,6 @@ void left_limit_switch_hit() {
 void right_limit_switch_hit() {
   right_now = millis();
   if (right_now - right_last_time > DEBOUNCE_DELAY_MS) {
-    if (STATE != HOMING) {
-      error_running = true; // Flag to change state to ERROR
-    } else {
-      right_limit_calibration = true; // Flag to tell when switch has been hit while in calibration
-    }
     Serial.println("Right limit switch hit");
     if (!right_hit){
       analogWrite(E1, 0);
@@ -215,11 +268,6 @@ void right_limit_switch_hit() {
 void top_limit_switch_hit() {
   top_now = millis();
   if(top_now - top_last_time > DEBOUNCE_DELAY_MS) {
-    if (STATE != HOMING) {
-      error_running = true; // Flag to change state to ERROR
-    } else {
-      top_limit_calibration = true; // Flag to tell when switch has been hit while in calibration
-    }
     if (!top_hit){
       analogWrite(E1, 0);
       analogWrite(E2, 0);
@@ -232,11 +280,6 @@ void top_limit_switch_hit() {
 void bottom_limit_switch_hit() {
   bottom_now = millis();
   if (bottom_now - bottom_last_time > DEBOUNCE_DELAY_MS) {
-    if (STATE != HOMING) {
-      error_running = true; // Flag to change state to ERROR
-    } else {
-      bottom_limit_calibration = true; // Flag to tell when switch has been hit while in calibration
-    }
     Serial.println("Bottom limit switch hit");
     //Serial.println(bottom_hit);
     if (!bottom_hit){
@@ -300,62 +343,64 @@ void Homing() {
   currentY = 0;
 }
 
-// void left_limit_switch_hit() {
-//   left_now = millis();
-//   if (left_now - left_last_time > DEBOUNCE_DELAY_MS) {
-//     Serial.println("Left limit switch hit");
-//     left_hit = true;
-//     // Stop motors
-//     analogWrite(E1, 0);
-//     analogWrite(E2, 0);
-//   }
-//   left_last_time = left_now;
-// }
+#ifndef LIMIT_SWITCH
+  void left_limit_switch_hit() {
+    left_now = millis();
+    if (left_now - left_last_time > DEBOUNCE_DELAY_MS) {
+      Serial.println("Left limit switch hit");
+      left_hit = true;
+      // Stop motors
+      analogWrite(E1, 0);
+      analogWrite(E2, 0);
+    }
+    left_last_time = left_now;
+  }
 
-// void right_limit_switch_hit() {
-//   right_now = millis();
-//   if (right_now - right_last_time > DEBOUNCE_DELAY_MS) {
-//     Serial.println("Right limit switch hit");
-//     right_hit = true;
+  void right_limit_switch_hit() {
+    right_now = millis();
+    if (right_now - right_last_time > DEBOUNCE_DELAY_MS) {
+      Serial.println("Right limit switch hit");
+      right_hit = true;
 
-//     // Stop motors
-//     analogWrite(E1, 0);
-//     analogWrite(E2, 0);
-//   }
-//   right_last_time = right_now;
+      // Stop motors
+      analogWrite(E1, 0);
+      analogWrite(E2, 0);
+    }
+    right_last_time = right_now;
 
-//   right_hit = true;
+    right_hit = true;
 
-//   // Stop motors
-//   analogWrite(E1, 0);
-//   analogWrite(E2, 0);
-// }
+    // Stop motors
+    analogWrite(E1, 0);
+    analogWrite(E2, 0);
+  }
 
-// void top_limit_switch_hit() {
-//   top_now = millis();
-//   if(top_now - top_last_time > DEBOUNCE_DELAY_MS) {
-//     Serial.println("Top limit switch hit");
-//     top_hit = true;
+  void top_limit_switch_hit() {
+    top_now = millis();
+    if(top_now - top_last_time > DEBOUNCE_DELAY_MS) {
+      Serial.println("Top limit switch hit");
+      top_hit = true;
 
-//     // Stop motors
-//     analogWrite(E1, 0);
-//     analogWrite(E2, 0);
+      // Stop motors
+      analogWrite(E1, 0);
+      analogWrite(E2, 0);
 
-//   }
-//   top_last_time = top_now;
+    }
+    top_last_time = top_now;
 
-//   top_hit = true;
-// }
+    top_hit = true;
+  }
 
-// void bottom_limit_switch_hit() {
-//   bottom_now = millis();
-//   if (bottom_now - bottom_last_time > DEBOUNCE_DELAY_MS) {
-//     Serial.println("Bottom limit switch hit");
-//     //Serial.println(bottom_hit);
-//     bottom_hit = true;
-//     // Stop motors
-//     analogWrite(E1, 0);
-//     analogWrite(E2, 0);
-//   }
-//   bottom_last_time = bottom_now;
-// }
+  void bottom_limit_switch_hit() {
+    bottom_now = millis();
+    if (bottom_now - bottom_last_time > DEBOUNCE_DELAY_MS) {
+      Serial.println("Bottom limit switch hit");
+      //Serial.println(bottom_hit);
+      bottom_hit = true;
+      // Stop motors
+      analogWrite(E1, 0);
+      analogWrite(E2, 0);
+    }
+    bottom_last_time = bottom_now;
+  }
+#endif
