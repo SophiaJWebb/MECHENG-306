@@ -19,14 +19,14 @@
 #define LENCB 10
 #define LENCA 11
 
-float K_p = 0.5;
+float K_p = 20;
 float K_i = 0;
 float K_d = 0;
 
 double VELOCITYDELAY = 1; //1/24 of a second try 1/8 if too fast
 int CTCTIMER = VELOCITYDELAY*15624; //Every 1 second 15624 
 double GEARRATIO = 171.79;
-double COUNTTODISTANCERATIO = 65.618946; // For 1mm 65.61 counts are needed
+double COUNTTODISTANCERATIO = 65.62; // For 1mm 65.61 counts are needed
 
 // limit switches 
 bool left_hit = false;
@@ -100,6 +100,9 @@ void setup() {
   pinMode(RIGHT_INTERRUPT_PIN, INPUT);
   pinMode(TOP_INTERRUPT_PIN, INPUT);
   pinMode(BOTTOM_INTERRUPT_PIN, INPUT);
+
+  pinMode(RENCB, INPUT);
+  pinMode(LENCB, INPUT);
 
   Serial.begin(9600);
   attachInterrupt(digitalPinToInterrupt(LEFT_INTERRUPT_PIN), left_limit_switch_hit, RISING);
@@ -206,17 +209,17 @@ void m2counting()
 // Check what RENCB is (0/1) when RENCA triggers the external interrupt on pin 3
 void RENCA_ISR()
 {
-    RDIRECTION = digitalRead(RENCB) ? CCW : CW;
+    RDIRECTION = digitalRead(RENCB) ? CW : CCW;
 
-    m1counting();
+    m2counting();
 }
 
 // Check what LENCB is (0/1) when LENCA triggers the external interrupt on pin 11
 void LENCA_ISR()
 {
-    LDIRECTION = digitalRead(LENCB) ? CCW : CW;
+    LDIRECTION = digitalRead(LENCB) ? CW : CCW;
     
-    m2counting();
+    m1counting();
 }
 
 double countToDistance(int count)
@@ -232,6 +235,8 @@ int distanceToCount(float distance)
 // Testing for just distance in one axis
 void PID_control(float delta_A_ref_in, float delta_B_ref_in) {
   bool running = true;
+  uint8_t M1_speed = 0;
+  uint8_t M2_speed = 0;
   // Reset the relative encoder counts
   delta_A_count_rel = 0;
   delta_B_count_rel = 0;
@@ -239,29 +244,35 @@ void PID_control(float delta_A_ref_in, float delta_B_ref_in) {
   bool delta_A_direction = (delta_A_ref <= 0) ? 1 : 0; // CCW (1) or CW (0)
   bool delta_B_direction = (delta_B_ref <= 0) ? 1 : 0;
 
-  while (running) {
-    if (delta_A_ref_in - delta_A_rel >= 0) {
-      digitalWrite(M1, delta_A_direction);
-      analogWrite(E1, K_p*(delta_A_ref_in - delta_A_rel));
-    } else {
-      digitalWrite(M1, !delta_A_direction);
-      analogWrite(E1, K_p*(delta_A_rel - delta_A_ref_in));
-    }
+  while ((delta_A_ref_in - delta_A_rel) > 1) {
+      M1_speed = K_p*(delta_A_ref_in - delta_A_rel);
 
+    // if (delta_A_ref_in - delta_A_rel >= 0) {
+    //   delta_A_direction = 0;
+    //   digitalWrite(M1, delta_A_direction);
+    //   analogWrite(E1, M1_speed);
+    // } else {
+    //   delta_A_direction = 1;
+    //   digitalWrite(M1, delta_A_direction);
+    //   analogWrite(E1, M1_speed);
+    // }
+
+    M2_speed = K_p*(delta_B_ref_in - delta_B_rel);
     if (delta_B_ref_in - delta_B_rel >= 0) {
       digitalWrite(M2, delta_B_direction);
-      analogWrite(E2, K_p*(delta_B_ref_in - delta_B_rel));
+      analogWrite(E2, M2_speed);
     } else {
       digitalWrite(M2, !delta_B_direction);
-      analogWrite(E2, K_p*(delta_B_rel - delta_B_ref_in));
+      analogWrite(E2, M2_speed);
     }
 
-    Serial.print("A rel is: ");
-    Serial.print(delta_A_rel);
+    Serial.print(delta_B_ref_in - delta_B_rel);
     Serial.print(" ");
     Serial.print("Direction is: ");
-    Serial.println(delta_A_direction);
+    Serial.println(delta_B_direction);
   }
+
+  Serial.println("Finished P control");
 }
 
 void left_limit_switch_hit() {
