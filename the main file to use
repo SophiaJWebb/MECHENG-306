@@ -179,11 +179,17 @@ int distanceToCount(float distance)
 void left_limit_switch_hit() {
   left_now = millis();
   if (left_now - left_last_time > DEBOUNCE_DELAY_MS) {
+    if (STATE != HOMING) {
+      error_running = true; // Flag to change state to ERROR
+    } else {
+      left_limit_calibration = true; // Flag to tell when switch has been hit while in calibration
+    }
     Serial.println("Left limit switch hit");
+    if (!left_hit){
+      analogWrite(E1, 0);
+      analogWrite(E2, 0);
+    }
     left_hit = true;
-    // Stop motors
-    analogWrite(E1, 0);
-    analogWrite(E2, 0);
   }
   left_last_time = left_now;
 }
@@ -191,48 +197,166 @@ void left_limit_switch_hit() {
 void right_limit_switch_hit() {
   right_now = millis();
   if (right_now - right_last_time > DEBOUNCE_DELAY_MS) {
+    if (STATE != HOMING) {
+      error_running = true; // Flag to change state to ERROR
+    } else {
+      right_limit_calibration = true; // Flag to tell when switch has been hit while in calibration
+    }
     Serial.println("Right limit switch hit");
+    if (!right_hit){
+      analogWrite(E1, 0);
+      analogWrite(E2, 0);
+    }
     right_hit = true;
-
-    // Stop motors
-    analogWrite(E1, 0);
-    analogWrite(E2, 0);
   }
   right_last_time = right_now;
-
-  right_hit = true;
-
-  // Stop motors
-  analogWrite(E1, 0);
-  analogWrite(E2, 0);
 }
 
 void top_limit_switch_hit() {
   top_now = millis();
   if(top_now - top_last_time > DEBOUNCE_DELAY_MS) {
-    Serial.println("Top limit switch hit");
+    if (STATE != HOMING) {
+      error_running = true; // Flag to change state to ERROR
+    } else {
+      top_limit_calibration = true; // Flag to tell when switch has been hit while in calibration
+    }
+    if (!top_hit){
+      analogWrite(E1, 0);
+      analogWrite(E2, 0);
+    }
     top_hit = true;
-
-    // Stop motors
-    analogWrite(E1, 0);
-    analogWrite(E2, 0);
-
   }
   top_last_time = top_now;
-
-  top_hit = true;
 }
 
 void bottom_limit_switch_hit() {
   bottom_now = millis();
   if (bottom_now - bottom_last_time > DEBOUNCE_DELAY_MS) {
+    if (STATE != HOMING) {
+      error_running = true; // Flag to change state to ERROR
+    } else {
+      bottom_limit_calibration = true; // Flag to tell when switch has been hit while in calibration
+    }
     Serial.println("Bottom limit switch hit");
     //Serial.println(bottom_hit);
+    if (!bottom_hit){
+      analogWrite(E1, 0);
+      analogWrite(E2, 0);
+    }
     bottom_hit = true;
-    // Stop motors
-    analogWrite(E1, 0);
-    analogWrite(E2, 0);
   }
   bottom_last_time = bottom_now;
 }
+
+
+void Homing() {
+    digitalWrite(M1,CCW);
+  digitalWrite(M2,CW);
+  analogWrite(E1, 200); //PWM Speed Control
+  analogWrite(E2, 200); //PWM Speed Control
+  while(!bottom_hit){
+    Serial.println("hit: ");
+    Serial.print(bottom_hit);
+  }
+  digitalWrite(M1,CW);
+  digitalWrite(M2,CCW);
+  analogWrite(E1, 100); //PWM Speed Control
+  analogWrite(E2, 100);
+  delay(2000);
+  bottom_hit = false;
+  digitalWrite(M1,CCW);
+  digitalWrite(M2,CW);
+  analogWrite(E1, 100); //PWM Speed Control
+  analogWrite(E2, 100); //PWM Speed Control
+  while(!bottom_hit){
+    Serial.println("moving");
+  }
+//left homing
+  bottom_hit = false;
+  digitalWrite(M1,CW);
+  digitalWrite(M2,CW);
+  analogWrite(E1, 200); //PWM Speed Control
+  analogWrite(E2, 200); //PWM Speed Control
+  while(!left_hit){
+    Serial.println("hit: ");
+    Serial.print(left_hit);
+  }
+  digitalWrite(M1,CCW);
+  digitalWrite(M2,CCW);
+  analogWrite(E1, 100); //PWM Speed Control
+  analogWrite(E2, 100);
+  delay(2000);
+  left_hit = false;
+  digitalWrite(M1,CW);
+  digitalWrite(M2,CW);
+  analogWrite(E1, 100); //PWM Speed Control
+  analogWrite(E2, 100); //PWM Speed Control
+  while(!left_hit){
+    Serial.println("moving");
+  }
+  left_hit = false;
+
+  currentX = 0;
+  currentY = 0;
+}
+
+// void left_limit_switch_hit() {
+//   left_now = millis();
+//   if (left_now - left_last_time > DEBOUNCE_DELAY_MS) {
+//     Serial.println("Left limit switch hit");
+//     left_hit = true;
+//     // Stop motors
+//     analogWrite(E1, 0);
+//     analogWrite(E2, 0);
+//   }
+//   left_last_time = left_now;
+// }
+
+// void right_limit_switch_hit() {
+//   right_now = millis();
+//   if (right_now - right_last_time > DEBOUNCE_DELAY_MS) {
+//     Serial.println("Right limit switch hit");
+//     right_hit = true;
+
+//     // Stop motors
+//     analogWrite(E1, 0);
+//     analogWrite(E2, 0);
+//   }
+//   right_last_time = right_now;
+
+//   right_hit = true;
+
+//   // Stop motors
+//   analogWrite(E1, 0);
+//   analogWrite(E2, 0);
+// }
+
+// void top_limit_switch_hit() {
+//   top_now = millis();
+//   if(top_now - top_last_time > DEBOUNCE_DELAY_MS) {
+//     Serial.println("Top limit switch hit");
+//     top_hit = true;
+
+//     // Stop motors
+//     analogWrite(E1, 0);
+//     analogWrite(E2, 0);
+
+//   }
+//   top_last_time = top_now;
+
+//   top_hit = true;
+// }
+
+// void bottom_limit_switch_hit() {
+//   bottom_now = millis();
+//   if (bottom_now - bottom_last_time > DEBOUNCE_DELAY_MS) {
+//     Serial.println("Bottom limit switch hit");
+//     //Serial.println(bottom_hit);
+//     bottom_hit = true;
+//     // Stop motors
+//     analogWrite(E1, 0);
+//     analogWrite(E2, 0);
+//   }
+//   bottom_last_time = bottom_now;
+// }
 
