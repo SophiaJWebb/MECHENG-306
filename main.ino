@@ -9,9 +9,9 @@
 
 //motor set up 
 #define E2 5
-#define M2 4 // Right
+#define M2 4
 #define E1 6
-#define M1 7 // Left
+#define M1 7
 
 // Encoder setup
 #define RENCA 3
