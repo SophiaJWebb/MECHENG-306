@@ -19,7 +19,7 @@
 #define LENCB 10
 #define LENCA 11
 
-float K_p = 0;
+float K_p = 0.5;
 float K_i = 0;
 float K_d = 0;
 
@@ -114,7 +114,7 @@ void setup() {
 void loop() {
   String command;
   // Put homing command here to run before anything happens (on boot up)
-  Homing();
+  //Homing();
 
   while (1) {
   switch (STATE) {
@@ -162,6 +162,7 @@ void loop() {
       delta_A_ref = inputs_to_encoder_count_delta_A(Parser.GetParameters()[0], Parser.GetParameters()[1]);
       delta_B_ref = inputs_to_encoder_count_delta_B(Parser.GetParameters()[0], Parser.GetParameters()[1]);
 
+      PID_control(delta_A_ref, delta_B_ref);
 
       STATE = IDLE;
       break;
@@ -186,14 +187,18 @@ float inputs_to_encoder_count_delta_B(float delta_X, float delta_Y) {
 
 void m1counting()
 {
-    delta_A_count_rel = RDIRECTION ? delta_A_count + 1 : delta_A_count - 1;
+  // Update both relative and absolute counts
+    delta_A_count_rel = LDIRECTION ? delta_A_count_rel + 1 : delta_A_count_rel - 1;
+    delta_A_count = LDIRECTION ? delta_A_count + 1 : delta_A_count - 1;
 
     delta_A_rel = countToDistance(delta_A_count_rel);
 }
 
 void m2counting()
 {
-    delta_B_count_rel = LDIRECTION ? delta_B_count + 1 :delta_B_count - 1;
+  // Update both relative and absolute counts
+    delta_B_count_rel = RDIRECTION ? delta_B_count_rel + 1 : delta_B_count_rel - 1;
+    delta_B_count = RDIRECTION ? delta_B_count + 1 : delta_B_count - 1;
 
     delta_B_rel = countToDistance(delta_B_count_rel);
 }
@@ -231,11 +236,31 @@ void PID_control(float delta_A_ref_in, float delta_B_ref_in) {
   delta_A_count_rel = 0;
   delta_B_count_rel = 0;
 
-  delta_A_direction = (delta_A_ref <= 0) ? 1 : 0; // CCW (1) or CW (0)
-  delta_B_direction = (delta_B_ref <= 0) ? 1 : 0;
+  bool delta_A_direction = (delta_A_ref <= 0) ? 1 : 0; // CCW (1) or CW (0)
+  bool delta_B_direction = (delta_B_ref <= 0) ? 1 : 0;
 
   while (running) {
-    
+    if (delta_A_ref_in - delta_A_rel >= 0) {
+      digitalWrite(M1, delta_A_direction);
+      analogWrite(E1, K_p*(delta_A_ref_in - delta_A_rel));
+    } else {
+      digitalWrite(M1, !delta_A_direction);
+      analogWrite(E1, K_p*(delta_A_rel - delta_A_ref_in));
+    }
+
+    if (delta_B_ref_in - delta_B_rel >= 0) {
+      digitalWrite(M2, delta_B_direction);
+      analogWrite(E2, K_p*(delta_B_ref_in - delta_B_rel));
+    } else {
+      digitalWrite(M2, !delta_B_direction);
+      analogWrite(E2, K_p*(delta_B_rel - delta_B_ref_in));
+    }
+
+    Serial.print("A rel is: ");
+    Serial.print(delta_A_rel);
+    Serial.print(" ");
+    Serial.print("Direction is: ");
+    Serial.println(delta_A_direction);
   }
 }
 
