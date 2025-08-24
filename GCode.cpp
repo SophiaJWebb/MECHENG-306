@@ -34,7 +34,7 @@ int GCodeParser::extractCommand(String tokens[], int tokenCount) {
     }
     // if M999 run homing command 
     else if (tokens[0] == "M999") {
-        return 1; // HOMING
+        return 0; // IDLE
     }
     // if G01, extract parameters
     else if (tokens[0] == "G01") {
