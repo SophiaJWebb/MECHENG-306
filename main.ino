@@ -8,10 +8,10 @@
 #define BOTTOM_INTERRUPT_PIN 20
 
 //motor set up 
-#define E2 5
-#define M2 4
-#define E1 6
-#define M1 7
+#define E1 5
+#define M1 4
+#define E2 6
+#define M2 7
 
 // Encoder setup
 #define RENCA 3
@@ -95,6 +95,11 @@ enum direction RDIRECTION = CCW;
 
 enum state STATE = IDLE;
 
+// Variables for homing routine 
+bool homing = false; 
+volatile unsigned int time_count = 0;
+bool timeFlag = false;
+
 void setup() {
   pinMode(LEFT_INTERRUPT_PIN, INPUT);
   pinMode(RIGHT_INTERRUPT_PIN, INPUT);
@@ -112,6 +117,10 @@ void setup() {
 
   attachInterrupt(digitalPinToInterrupt(RENCA), RENCA_ISR, RISING);
   attachInterrupt(digitalPinToInterrupt(LENCA), LENCA_ISR, RISING);
+
+  // --- Timer2 Normal Mode setup ---
+  TCCR2A = 0;   // Normal mode (WGM21:0 = 0)
+  TCCR2B |= (1 << CS22) | (1 << CS21) | (1 << CS20); // clk/1024 prescaler
 }
 
 void loop() {
@@ -154,13 +163,18 @@ void loop() {
     }
     
     case HOMING: {
-      // Run homing routine
       Serial.println("Running homing routine");
+      homing = true; 
+      Homing();
       STATE = IDLE;
       break;
     }
     case MOVING: {
       Serial.println("Running moving routine");
+      bool left_hit = false;
+      bool right_hit = false;
+      bool top_hit = false;
+      bool bottom_hit = false;
       // Find the delta A (left motor) and delta B (right motor) as the inputs to PID function
       delta_A_ref = inputs_to_encoder_count_delta_A(Parser.GetParameters()[0], Parser.GetParameters()[1]);
       delta_B_ref = inputs_to_encoder_count_delta_B(Parser.GetParameters()[0], Parser.GetParameters()[1]);
@@ -284,6 +298,9 @@ void left_limit_switch_hit() {
       analogWrite(E2, 0);
     }
     left_hit = true;
+    if (!homing){
+      STATE = IDLE;
+    }
   }
   left_last_time = left_now;
 }
@@ -292,11 +309,12 @@ void right_limit_switch_hit() {
   right_now = millis();
   if (right_now - right_last_time > DEBOUNCE_DELAY_MS) {
     Serial.println("Right limit switch hit");
-    if (!right_hit){
-      analogWrite(E1, 0);
-      analogWrite(E2, 0);
-    }
+    analogWrite(E1, 0);
+    analogWrite(E2, 0);
     right_hit = true;
+    if (!homing){
+      STATE = IDLE;
+    }
   }
   right_last_time = right_now;
 }
@@ -304,11 +322,12 @@ void right_limit_switch_hit() {
 void top_limit_switch_hit() {
   top_now = millis();
   if(top_now - top_last_time > DEBOUNCE_DELAY_MS) {
-    if (!top_hit){
-      analogWrite(E1, 0);
-      analogWrite(E2, 0);
-    }
+    analogWrite(E1, 0);
+    analogWrite(E2, 0);
     top_hit = true;
+    if (!homing){
+      STATE = IDLE;
+    }
   }
   top_last_time = top_now;
 }
@@ -323,60 +342,86 @@ void bottom_limit_switch_hit() {
       analogWrite(E2, 0);
     }
     bottom_hit = true;
+    if (!homing){
+      STATE = IDLE;
+    }
   }
   bottom_last_time = bottom_now;
 }
 
 
 void Homing() {
-  digitalWrite(M1,CCW);
-  digitalWrite(M2,CW);
+  // find bottom 
+  digitalWrite(M1,CW);
+  digitalWrite(M2,CCW);
   analogWrite(E1, 200); //PWM Speed Control
   analogWrite(E2, 200); //PWM Speed Control
   while(!bottom_hit){
-    Serial.println("hit: ");
-    Serial.print(bottom_hit);
+   Serial.println("moving bottom ");
+   Serial.print(bottom_hit);
   }
-  digitalWrite(M1,CW);
-  digitalWrite(M2,CCW);
-  analogWrite(E1, 100); //PWM Speed Control
-  analogWrite(E2, 100);
-  delay(2000);
-  bottom_hit = false;
+  time_count = 0;
   digitalWrite(M1,CCW);
   digitalWrite(M2,CW);
-  analogWrite(E1, 100); //PWM Speed Control
-  analogWrite(E2, 100); //PWM Speed Control
-  while(!bottom_hit){
-    Serial.println("moving");
-  }
-//left homing
-  bottom_hit = false;
-  digitalWrite(M1,CW);
-  digitalWrite(M2,CW);
-  analogWrite(E1, 200); //PWM Speed Control
-  analogWrite(E2, 200); //PWM Speed Control
-  while(!left_hit){
-    Serial.println("hit: ");
-    Serial.print(left_hit);
-  }
-  digitalWrite(M1,CCW);
-  digitalWrite(M2,CCW);
-  analogWrite(E1, 100); //PWM Speed Control
-  analogWrite(E2, 100);
-  delay(2000);
-  left_hit = false;
-  digitalWrite(M1,CW);
-  digitalWrite(M2,CW);
-  analogWrite(E1, 100); //PWM Speed Control
-  analogWrite(E2, 100); //PWM Speed Control
-  while(!left_hit){
-    Serial.println("moving");
-  }
-  left_hit = false;
+  analogWrite(E1, 150); //PWM Speed Control
+  analogWrite(E2, 150);
 
+  TCNT2 = 0; // Reset timer
+    //enable timer
+  TIMSK2 |= (1 << TOIE2);
+  while (!timeFlag) {
+   // Serial.println(time_count);
+  }
+  bottom_hit = false; // reset
+  digitalWrite(M1,CW);
+  digitalWrite(M2,CCW);
+  analogWrite(E1, 150); //PWM Speed Control
+  analogWrite(E2, 150); //PWM Speed Control
+  while(!bottom_hit){
+    //Serial.println("moving botttom 2");
+  }
+  bottom_hit = false; // ensure future limit switch hits stop motors 
+  timeFlag = false;
+// find left
+  digitalWrite(M1,CW);
+  digitalWrite(M2,CW);
+  analogWrite(E1, 200); //PWM Speed Control
+  analogWrite(E2, 200); //PWM Speed Control
+  while(!left_hit){
+  }
+  TCNT2 = 0; // Reset timer
+  time_count = 0;
+  digitalWrite(M1,CCW);
+  digitalWrite(M2,CCW);
+  analogWrite(E1, 150); //PWM Speed Control
+  analogWrite(E2, 150);
+  timeFlag = false;
+  while (!timeFlag) {
+  }
+  left_hit = false;
+  digitalWrite(M1,CW);
+  digitalWrite(M2,CW);
+  analogWrite(E1, 150); //PWM Speed Control
+  analogWrite(E2, 150); //PWM Speed Control
+  while(!left_hit){
+   // Serial.println("moving left 2");
+  }
+  left_hit = false; // ensure future limit switch hits stop motors 
+  // homing complete
   currentX = 0;
   currentY = 0;
+  homing = false;
+
+  TIMSK2 &= ~(1 << TOIE2);
+  timeFlag = false;
+}
+
+ISR(TIMER2_OVF_vect) {
+  time_count++;
+  if (time_count >= 63) { // approx 1 sec 
+    timeFlag = true;
+    time_count = 0;
+  }
 }
 
 #ifndef LIMIT_SWITCH
@@ -397,7 +442,6 @@ void Homing() {
     if (right_now - right_last_time > DEBOUNCE_DELAY_MS) {
       Serial.println("Right limit switch hit");
       right_hit = true;
-
       // Stop motors
       analogWrite(E1, 0);
       analogWrite(E2, 0);
