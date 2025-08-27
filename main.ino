@@ -303,29 +303,29 @@ void PID_control(float delta_A_ref_in, float delta_B_ref_in) {
 //------------------Move funtions------------------//
 void move_left(int value) {
   digitalWrite(M1, CW);
-  analogWrite(E1, value);
   digitalWrite(M2, CW);
+  analogWrite(E1, value);
   analogWrite(E2, value);
 }
 
 void move_right(int value) {
   digitalWrite(M1, CCW);
-  analogWrite(E1, value);
   digitalWrite(M2, CCW);
+  analogWrite(E1, value);
   analogWrite(E2, value);
 }
 
 void move_top(int value) {
   digitalWrite(M1, CCW);
-  analogWrite(E1, value);
   digitalWrite(M2, CW);
+  analogWrite(E1, value);
   analogWrite(E2, value);
 }
 
 void move_bottom(int value) {
   digitalWrite(M1, CW);
-  analogWrite(E1, value);
   digitalWrite(M2, CCW);
+  analogWrite(E1, value);
   analogWrite(E2, value);
 }
 
@@ -382,6 +382,74 @@ void Homing() {
   currentX = 0;
   currentY = 0;
   homing = false;
+}
+
+//-------------MOVING function-------------//
+void moving(float x, float y, float v){
+  float A = inputs_to_encoder_count_delta_A(x, y);
+  float B = inputs_to_encoder_count_delta_B(x, y);
+
+  int M1_direction = CCW;
+  int M2_direction = CCW;
+
+  bool A_complete = false;
+  bool B_complete = false;
+
+  bool positive_A = false;
+  bool positive_B = false;
+
+  delta_A_count_rel = 0;
+  delta_A_rel = 0;
+  delta_B_count_rel = 0;
+  delta_B_rel = 0;
+
+  if (A > 0){ //CCW motor 1
+    M1_direction = CCW;
+    positive_A = true;
+  }
+  else if (A < 0){
+    M1_direction = CW;
+  }
+  if (B > 0){ //CCW motor 2
+    M2_direction = CCW;
+    positive_B = true;
+  }
+  else if (B < 0){
+    M2_direction = CW;
+  }
+  //start motors
+  digitalWrite(M1, M1_direction);
+  digitalWrite(M2, M2_direction);
+  analogWrite(E1, v);
+  analogWrite(E2, v);
+
+  // stop motors on complete movement in each direction 
+  while (!A_complete | !B_complete){
+    if (positive_A){
+      if (delta_A_rel >= A){
+        analogWrite(E1, 0);
+        A_complete = true;
+      }
+    }
+    else{
+      if (delta_A_rel <= A){
+        analogWrite(E1, 0);
+        A_complete = true;
+      }
+    }
+    if (positive_B){
+      if (delta_B_rel >= A){
+        analogWrite(E1, 0);
+        B_complete = true;
+      }
+    }
+    else{
+      if (delta_B_rel <= A){
+        analogWrite(E1, 0);
+        B_complete = true;
+      }
+    }
+  }
 }
 
 //-----------Limit switch ISRs------------//
