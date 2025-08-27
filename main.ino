@@ -363,7 +363,7 @@ void Homing() {
   while(!bottom_hit){
     asm volatile("nop");
   }
-  bottom_hit = false; // ensure future limit switch hits stop motors 
+  bottom_hit = false; // reset
 
 // find left
   move_left(120);
@@ -371,12 +371,12 @@ void Homing() {
     asm volatile("nop");
   }
   back_up(right);
-  left_hit = false;
+  left_hit = false; //reset
   move_left(100);
   while(!left_hit){
    asm volatile("nop");
   }
-  left_hit = false; // ensure future limit switch hits stop motors 
+  left_hit = false; // reset
 
   // homing complete
   currentX = 0;
