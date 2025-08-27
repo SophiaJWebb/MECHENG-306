@@ -87,7 +87,7 @@ void GCodeParser::extractParameters(String tokens[], int tokenCount){
 
 bool GCodeParser::ValidateParameters(float currentX, float currentY) {
     // validate x and y distances
-    if ((parameters[0] + currentX) > 150 || 
+    if ((parameters[0] + currentX) > 225 || 
         (parameters[1] + currentY) > 150 || 
         (parameters[1] + currentY) < 0 || 
         (parameters[0] + currentX) < 0) {
