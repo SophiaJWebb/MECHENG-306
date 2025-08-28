@@ -13,10 +13,10 @@
 #define BOTTOM_INTERRUPT_PIN 20
 
 // Motor driver pins
-#define E2 5
-#define M2 4   // Right DIR
-#define E1 6
-#define M1 7   // Left  DIR
+#define E2 6
+#define M2 7   // Right DIR
+#define E1 5
+#define M1 4   // Left  DIR
 
 // Encoder pins
 #define RENCA 2   // Right encoder A (interrupt capable)
@@ -26,15 +26,15 @@
 
 // =================== GAINS (PI on velocity) ===================
 // Might need different gains for each motor (tune independently)
-float K_p_left = 0.0f;
+float K_p_left = 5.0f;
 float K_i_left = 0.0f; // Zero for now
 
-float K_p_right = 0.0f;
+float K_p_right = 5.0f;
 float K_i_right = 0.0f; // Zero for now
 
 // =================== MECHANICS / UNITS ===================
 // counts per mm (you provided): ~65.62 counts/mm
-const float COUNTTODISTANCERATIO = 65.618946f;  // counts per mm
+const float COUNTTODISTANCERATIO = 43.74f;  // counts per mm
 
 // =================== STATE FLAGS (limit switches) ===================
 volatile bool left_hit = false;
@@ -63,6 +63,12 @@ enum state { IDLE, PARSING, HOMING, MOVING, ERROR, CALIBRATION };
 volatile direction LDIRECTION = CCW;
 volatile direction RDIRECTION = CCW;
 
+long int rel_A_count = 0;
+long int rel_B_count = 0;
+
+int rel_A = 0;
+int rel_B = 0;
+
 state STATE = IDLE;
 
 // ========== MOTION PROFILE (counts-based; NOT feedforward) ==========
@@ -77,7 +83,7 @@ const float LOOP_HZ = 100.0f;
 const float DT      = 1.0f / LOOP_HZ;
 
 // Stop tolerances
-const long  POS_TOL_COUNTS = 100;     // counts
+const long  POS_TOL_MM = 1; // mm
 const float VEL_TOL_CPS    = 100.0f; // counts/s  (~0.15 mm/s)
 
 // =================== HELPERS ===================
@@ -86,44 +92,33 @@ static inline float clampf(float x, float lo, float hi){
 }
 static inline float sgnf(float x){ return (x > 0) - (x < 0); }
 
-static inline void driveMotor(int pinDir, int pinPwm, float u){
-  int dir = (u >= 0.0f) ? HIGH : LOW;           // sign -> DIR
-  int pwm = (int)clampf(fabs(u), 70.0f, 255.0f); // mag -> PWM
-  // Serial.print("U: ");
-  // Serial.println(u,10);
-  // Serial.print("PWM: ");
-  // Serial.println(pwm);
-  digitalWrite(pinDir, dir);
-  analogWrite(pinPwm, pwm);
-  if (u==0){analogWrite(pinPwm, 0);}
-}
-
 // Functions for the offset difference between motors
 // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-static inline void driveMotorLeft(int pinDir, int pinPwm, float u){
-  int dir = (u >= 0.0f) ? HIGH : LOW;           // sign -> DIR
-  int pwm = (int)clampf(fabs(u), 75.0f, 255.0f); // mag -> PWM
+static inline void driveMotorLeft(bool direction, uint8_t PWM_value) {
+  uint8_t pwm = clampf(abs(PWM_value), 75, 255); // mag -> PWM
   // Serial.print("U: ");
   // Serial.println(u,10);
   // Serial.print("PWM: ");
   // Serial.println(pwm);
-  digitalWrite(pinDir, dir);
-  analogWrite(pinPwm, pwm);
-  if (u==0){analogWrite(pinPwm, 0);}
+  digitalWrite(M1, direction);
+  analogWrite(E1, pwm);
 }
 
-static inline void driveMotorRight(int pinDir, int pinPwm, float u){
-  int dir = (u >= 0.0f) ? HIGH : LOW;           // sign -> DIR
-  int pwm = (int)clampf(fabs(u), 58.0f, 255.0f); // mag -> PWM
+static inline void driveMotorRight(bool direction, uint8_t PWM_value) {
+  uint8_t pwm = clampf(abs(PWM_value), 58, 255); // mag -> PWM
   // Serial.print("U: ");
   // Serial.println(u,10);
   // Serial.print("PWM: ");
   // Serial.println(pwm);
-  digitalWrite(pinDir, dir);
-  analogWrite(pinPwm, pwm);
-  if (u==0){analogWrite(pinPwm, 0);}
+  digitalWrite(M2, direction);
+  analogWrite(E2, pwm);
 }
 // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+static inline void stopMotors() {
+  analogWrite(E1, 0);
+  analogWrite(E2, 0);
+}
 
 // Trapezoid in counts (remain in counts, v_cmd in counts/s)
 static inline float stepTrapezoidCounts(float v_cmd_cps, float remain_counts) {
@@ -177,10 +172,10 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(BOTTOM_INTERRUPT_PIN), bottom_limit_switch_hit, RISING);
 
   // Encoders
-  pinMode(RENCA, INPUT_PULLUP);
-  pinMode(RENCB, INPUT_PULLUP);
-  pinMode(LENCA, INPUT_PULLUP);
-  pinMode(LENCB, INPUT_PULLUP);
+  pinMode(RENCA, INPUT);
+  pinMode(RENCB, INPUT);
+  pinMode(LENCA, INPUT);
+  pinMode(LENCB, INPUT);
 
   attachInterrupt(digitalPinToInterrupt(RENCA), RENCA_ISR, RISING);
   attachInterrupt(digitalPinToInterrupt(LENCA), LENCA_ISR, RISING);
@@ -215,8 +210,7 @@ void loop() {
   while (1) {
     switch (STATE) {
       case IDLE: {
-        driveMotor(M1, E1, 0);
-        driveMotor(M2, E2, 0);
+        stopMotors();
         Serial.println("State Idle");
         Serial.println("Enter GCode command");
         while (Serial.available() == 0) { /* wait */ }
@@ -263,10 +257,6 @@ void loop() {
         long delta_B_ticks = (long)roundf(dL_mm * COUNTTODISTANCERATIO);
         // G01 X0 Y-10 F10
         // PI-only move with trapezoid speed limiting
-        Serial.print("deltaA tick: ");
-        Serial.println(delta_A_ticks);
-        Serial.print("deltaB tick: ");
-        Serial.println(delta_B_ticks);
         PI_control(delta_A_ticks, delta_B_ticks);
 
         // Update current XY (after successful move)
@@ -304,12 +294,12 @@ float inputs_to_encoder_count_delta_B(float delta_X, float delta_Y) {
 // Right encoder A rising: read B to infer direction
 void RENCA_ISR() {
   RDIRECTION = digitalRead(RENCB) ? CCW : CW;
-  motorR.countTicks(RDIRECTION ? 1 : -1);
+  rel_B_count = RDIRECTION ? rel_B_count + 1 : rel_B_count - 1;
 }
 // Left encoder A rising: read B to infer direction
 void LENCA_ISR() {
   LDIRECTION = digitalRead(LENCB) ? CCW : CW;
-  motorL.countTicks(LDIRECTION ? -1 : 1);
+  rel_A_count = LDIRECTION ? rel_A_count - 1 : rel_A_count + 1;
 }
 
 // =================== LIMIT SWITCH ISRs ===================
@@ -386,107 +376,97 @@ void Homing() {
   currentY = 0;
 }
 
+double countToDistance(int count)
+{
+  return (count/COUNTTODISTANCERATIO);
+}
+
+int distanceToCount(float distance)
+{
+  return ((int)distance*COUNTTODISTANCERATIO);
+}
+
 // =================== PI-ONLY MOVE (counts + counts/s) ===================
 void PI_control(long delta_A_ref_in, long delta_B_ref_in) {
-  // Zero relative counts
-  motorR.resetEncoder();
-  motorL.resetEncoder();
+  uint8_t PWM_A = 0;
+  uint8_t PWM_B = 0;
 
-  const long targetRcount = delta_A_ref_in;  // counts
-  const long targetLcount = delta_B_ref_in;  // counts
+  bool A_dir = CCW;
+  bool B_dir = CCW;
+  bool aDone = false;
+  bool bDone = false;
+
+  // Zero relative counts
+  rel_A_count = 0;
+  rel_B_count = 0;
+
+  const float targetLdist = countToDistance(delta_A_ref_in);  // mm
+  const float targetRdist = countToDistance(delta_B_ref_in);  // mm
+
+  Serial.print(targetLdist);
+  Serial.print(" ");
+  Serial.println(targetRdist);
 
   long lastR = 0, lastL = 0;
   float vA_cps = 0.0f, vB_cps = 0.0f;            // measured counts/s
   float vCmdR_cps = 0.0f, vCmdL_cps = 0.0f;      // command counts/s
   float iA = 0.0f, iB = 0.0f;                    // integrators
 
-  // Anti-windup so K_i * i <= 255
-  //const float I_MAX = 255.0f / max(1.0f, K_i);
+  // Need a calculation for iA and iB if want to use them
 
-  unsigned long tNext = millis();
+  // Set the directions of left and right motors
+  while(true) {
+    A_dir = (targetLdist - rel_A) > 0 ? CCW : CW; // Check displacement needed to move
+    B_dir = (targetRdist - rel_B) > 0 ? CCW : CW;
+    PWM_A = K_p_left*abs(targetLdist - rel_A) + iA;
+    PWM_B = K_p_right*abs(targetRdist - rel_B) + iB;
 
-  for (;;) {
-    // fixed-rate loop @ 100 Hz
-    unsigned long now = millis();
-    if ((long)(now - tNext) < 0) continue;
-    tNext += (unsigned long)(1000.0f * DT);
+    rel_A = countToDistance(rel_A_count);
+    rel_B = countToDistance(rel_B_count);
 
-    // Safety: limit switches
-    if (left_hit || right_hit || top_hit || bottom_hit) {
-      driveMotor(M1, E1, 0);
-      driveMotor(M2, E2, 0);
-      Serial.println("ABORT: limit switch hit");
-      return;
-    }
+    // Break out when both delta A and delta B are within some distance of target
+    aDone = abs(targetLdist - rel_A) < POS_TOL_MM ? true : false;
+    bDone = abs(targetRdist - rel_B) < POS_TOL_MM ? true : false;
 
-    // Read encoders
-    long cR= motorR.getEncoderTicks();
-    long cL= motorL.getEncoderTicks();
+    driveMotorLeft(A_dir, PWM_A);
+    driveMotorRight(B_dir, PWM_B);
 
-    long dR = cR- lastR;
-    long dL = cL- lastL;
-    lastR = cR; lastL = cL;
+    Serial.print("A rel (mm): ");
+    Serial.print(rel_A);
+    Serial.print(" ");
+    Serial.print("B rel (mm): ");
+    Serial.println(rel_B);
 
-    // counts/s
-    vA_cps = (float)dR / DT;
-    vB_cps = (float)dL / DT;
+    // Serial.print("A rel count: ");
+    // Serial.print(rel_A_count);
+    // Serial.print(" ");
+    // Serial.print("B rel count: ");
+    // Serial.println(rel_B_count);
 
-    // Remaining counts
-    long remR_counts = (targetRcount - cR);
-    long remL_counts = (targetLcount - cL);
-    
+    // Serial.print("A diff (mm): ");
+    // Serial.print(abs(targetLdist - rel_A));
+    // Serial.print(" ");
+    // Serial.print("B diff (mm): ");
+    // Serial.println(abs(targetRdist - rel_B));
 
-    // // Trapezoid setpoints (counts/s)
-    // vCmdR_cps = stepTrapezoidCounts(vCmdR_cps, (float)remR_counts);
-    // vCmdL_cps = stepTrapezoidCounts(vCmdL_cps, (float)remL_counts);
+    // Serial.print("A PWM: ");
+    // Serial.print(PWM_A);
+    // Serial.print(" ");
+    // Serial.print("B PWM: ");
+    // Serial.println(PWM_B);
 
-    // // PI on velocity (counts/s)
-    // float eA = vCmdR_cps - vA_cps;
-    // float eB = vCmdL_cps - vB_cps;
+    // Serial.print("A done: ");
+    // Serial.print(aDone);
+    // Serial.print(" ");
+    // Serial.print("B done: ");
+    // Serial.println(bDone);
 
-    iA+= remR_counts*DT;
-    iB+= remR_counts*DT;
-    // iA += eA * DT;  iA = clampf(iA, -I_MAX, I_MAX);
-    // iB += eB * DT;  iB = clampf(iB, -I_MAX, I_MAX);
-
-    float uA = clampf(K_p_left*remR_counts + K_i_left*iA, -255.0f, 255.0f);
-    float uB = clampf(K_p_right*remL_counts + K_i_right*iB, -255.0f, 255.0f);
-
-    // Drive motors
-    driveMotorLeft(M1, E1, uA);
-    driveMotorRight(M2, E2, uB);
-
-    // Stop when close *and* slow
-    bool aDone = (labs(remR_counts) <= POS_TOL_COUNTS);// && (fabs(vA_cps) <= VEL_TOL_CPS);
-    bool bDone = (labs(remL_counts) <= POS_TOL_COUNTS);//&& (fabs(vB_cps) <= VEL_TOL_CPS);
-    if (aDone && bDone) 
-    {
-      Serial.println("done");
-      driveMotor(M1, E1, 0);
-      driveMotor(M2, E2, 0);
+    if (aDone && bDone) {
       break;
     }
-
-    // Optional status @ ~5 Hz (mm & mm/s)
-    static int div=0;
-    if (++div >= (int)(LOOP_HZ/100)) { div=0;
-      float posA_mm = (float)cR/ COUNTTODISTANCERATIO;
-      float posB_mm = (float)cL/ COUNTTODISTANCERATIO;
-      float vA_mmps = vA_cps / COUNTTODISTANCERATIO;
-      float vB_mmps = vB_cps / COUNTTODISTANCERATIO;
-      Serial.print("R "); Serial.print(posA_mm, 2); Serial.print(" mm  v ");
-      Serial.print(vA_mmps, 1); Serial.print(" mm/s ");
-      Serial.print(remR_counts); Serial.print(" counts remaining ");
-      Serial.print(uA, 2); Serial.print(" PWM");
-      Serial.print("  |  L ");
-      Serial.print(posB_mm, 2); Serial.print(" mm  v ");
-      Serial.print(vB_mmps, 1); Serial.print(" mm/s ");
-      Serial.print(remL_counts); Serial.print(" counts remaining ");
-      Serial.print(uB, 2); Serial.println(" PWM");
-    } //G01 X10 Y-40 F1
+    delay(100);
   }
 
   // Stop cleanly
-  driveMotor(M1, E1, 0);
-  driveMotor(M2, E2, 0);
+  stopMotors();
 }
