@@ -24,9 +24,20 @@
 #define LENCB 11  // Left encoder B
 #define LENCA 3  // Left encoder A (NOTE: needs an interrupt-capable pin on your board)
 
+// ======== FEEDFORWARD / FRICTION ========
+float KVFF_R = 0.9f;  // PWM per (counts/s) for RIGHT  (tune)
+float KVFF_L = 0.9f;  // PWM per (counts/s) for LEFT   (tune)
+float KAFF_R = 0.0f;  // PWM per (counts/s^2). Start 0; optional later.
+float KAFF_L = 0.0f;
+
+float KF_R   = 15.0f; // static friction breakaway PWM RIGHT (tune 8–25)
+float KF_L   = 15.0f; // static friction breakaway PWM LEFT
+float MIN_PWM = 0.0f; // keep 0; we’ll add KF only when moving
+
+
 // =================== GAINS (PI on velocity) ===================
-float K_p = 0.5f;
-float K_i = 1.0f;
+float K_p = 0.2f;
+float K_i = 0.5f;
 
 // =================== MECHANICS / UNITS ===================
 // counts per mm (you provided): ~65.62 counts/mm
@@ -83,16 +94,16 @@ static inline float clampf(float x, float lo, float hi){
 static inline float sgnf(float x){ return (x > 0) - (x < 0); }
 
 static inline void driveMotor(int pinDir, int pinPwm, float u){
-  int dir = (u >= 0.0f) ? HIGH : LOW;           // sign -> DIR
-  int pwm = (int)clampf(fabs(u), 70.0f, 255.0f); // mag -> PWM
-  // Serial.print("U: ");
-  // Serial.println(u,10);
-  // Serial.print("PWM: ");
-  // Serial.println(pwm);
+  if (fabs(u) < 1.0f) {        // small = stop
+    analogWrite(pinPwm, 0);
+    return;
+  }
+  int dir = (u >= 0.0f) ? HIGH : LOW;
+  int pwm = (int)clampf(fabs(u), 0.0f, 255.0f);
   digitalWrite(pinDir, dir);
   analogWrite(pinPwm, pwm);
-  if (u==0){analogWrite(pinPwm, 0);}
 }
+
 
 // Trapezoid in counts (remain in counts, v_cmd in counts/s)
 static inline float stepTrapezoidCounts(float v_cmd_cps, float remain_counts) {
@@ -357,7 +368,7 @@ void Homing() {
 
 // =================== PI-ONLY MOVE (counts + counts/s) ===================
 void PI_control(long delta_A_ref_in, long delta_B_ref_in) {
-  // Zero relative counts
+  // Reset encoders to make "target = delta"
   motorR.resetEncoder();
   motorL.resetEncoder();
 
@@ -365,22 +376,23 @@ void PI_control(long delta_A_ref_in, long delta_B_ref_in) {
   const long targetLcount = delta_B_ref_in;  // counts
 
   long lastR = 0, lastL = 0;
-  float vA_cps = 0.0f, vB_cps = 0.0f;            // measured counts/s
-  float vCmdR_cps = 0.0f, vCmdL_cps = 0.0f;      // command counts/s
-  float iA = 0.0f, iB = 0.0f;                    // integrators
+  float vA_cps = 0.0f, vB_cps = 0.0f;        // measured velocities (counts/s)
+  float vCmdR_cps = 0.0f, vCmdL_cps = 0.0f;  // commanded velocities (counts/s)
+  float iR = 0.0f, iL = 0.0f;                // velocity-loop integrators
 
-  // Anti-windup so K_i * i <= 255
+  // Back-calculation style anti-windup (simple: integrate only when not saturated)
+  const float UMAX = 255.0f;
   const float I_MAX = 255.0f / max(1.0f, K_i);
 
   unsigned long tNext = millis();
 
   for (;;) {
-    // fixed-rate loop @ 100 Hz
+    // Fixed 100 Hz
     unsigned long now = millis();
     if ((long)(now - tNext) < 0) continue;
     tNext += (unsigned long)(1000.0f * DT);
 
-    // Safety: limit switches
+    // Safety
     if (left_hit || right_hit || top_hit || bottom_hit) {
       driveMotor(M1, E1, 0);
       driveMotor(M2, E2, 0);
@@ -388,74 +400,96 @@ void PI_control(long delta_A_ref_in, long delta_B_ref_in) {
       return;
     }
 
-    // Read encoders
-    long cR= motorR.getEncoderTicks();
-    long cL= motorL.getEncoderTicks();
+    // Encoder positions
+    long cR = motorR.getEncoderTicks();
+    long cL = motorL.getEncoderTicks();
 
-    long dR = cR- lastR;
-    long dL = cL- lastL;
-    lastR = cR; lastL = cL;
-
-    // counts/s
+    // Measured velocities (counts/s)
+    long dR = cR - lastR; lastR = cR;
+    long dL = cL - lastL; lastL = cL;
     vA_cps = (float)dR / DT;
     vB_cps = (float)dL / DT;
 
-    // Remaining counts
-    long remR_counts = (targetRcount - cR);
-    long remL_counts = (targetLcount - cL);
-    
+    // Remaining distance (counts)
+    long remR_counts = targetRcount - cR;
+    long remL_counts = targetLcount - cL;
 
-    // // Trapezoid setpoints (counts/s)
-    // vCmdR_cps = stepTrapezoidCounts(vCmdR_cps, (float)remR_counts);
-    // vCmdL_cps = stepTrapezoidCounts(vCmdL_cps, (float)remL_counts);
+    // Trajectory: trapezoid in counts/s (keeps both axes time-aligned)
+    vCmdR_cps = stepTrapezoidCounts(vCmdR_cps, (float)remR_counts);
+    vCmdL_cps = stepTrapezoidCounts(vCmdL_cps, (float)remL_counts);
 
-    // // PI on velocity (counts/s)
-    // float eA = vCmdR_cps - vA_cps;
-    // float eB = vCmdL_cps - vB_cps;
+    // ===== Velocity PI + Feedforward =====
+    float eR = vCmdR_cps - vA_cps;  // velocity error
+    float eL = vCmdL_cps - vB_cps;
 
-    iA+= remR_counts*DT;
-    iB+= remR_counts*DT;
-    // iA += eA * DT;  iA = clampf(iA, -I_MAX, I_MAX);
-    // iB += eB * DT;  iB = clampf(iB, -I_MAX, I_MAX);
+    // Feedforward (velocity + optional accel + static friction to break stiction)
+    // Note: we approximate accel from velocity slope of the profile
+    static float vCmdR_prev = 0.0f, vCmdL_prev = 0.0f;
+    float aCmdR_cps2 = (vCmdR_cps - vCmdR_prev) / DT;
+    float aCmdL_cps2 = (vCmdL_cps - vCmdL_prev) / DT;
+    vCmdR_prev = vCmdR_cps; vCmdL_prev = vCmdL_cps;
 
-    float uA = clampf(K_p*remR_counts + K_i*iA, -255.0f, 255.0f);
-    float uB = clampf(K_p*remL_counts + K_i*iB, -255.0f, 255.0f);
+    float ffR = KVFF_R * vCmdR_cps + KAFF_R * aCmdR_cps2;
+    float ffL = KVFF_L * vCmdL_cps + KAFF_L * aCmdL_cps2;
+
+    // Static friction kick only when we intend to move
+    if (fabs(vCmdR_cps) > 1.0f) ffR += KF_R * sgnf(vCmdR_cps);
+    if (fabs(vCmdL_cps) > 1.0f) ffL += KF_L * sgnf(vCmdL_cps);
+
+    // PI
+    float uR_pi = K_p * eR + K_i * iR;
+    float uL_pi = K_p * eL + K_i * iL;
+
+    float uR = uR_pi + ffR;
+    float uL = uL_pi + ffL;
+
+    // Clamp & anti-windup (integrate only if not saturating in the same direction)
+    float uR_clamped = clampf(uR, -UMAX, UMAX);
+    float uL_clamped = clampf(uL, -UMAX, UMAX);
+    bool satR = (uR != uR_clamped);
+    bool satL = (uL != uL_clamped);
+
+    if (!satR || (satR && sgnf(eR) != sgnf(uR))) {  // conditional integrate
+      iR = clampf(iR + eR * DT, -I_MAX, I_MAX);
+    }
+    if (!satL || (satL && sgnf(eL) != sgnf(uL))) {
+      iL = clampf(iL + eL * DT, -I_MAX, I_MAX);
+    }
 
     // Drive motors
-    driveMotor(M1, E1, uA);
-    driveMotor(M2, E2, uB);
+    driveMotor(M1, E1, uR_clamped);
+    driveMotor(M2, E2, uL_clamped);
 
-    // Stop when close *and* slow
-    bool aDone = (labs(remR_counts) <= POS_TOL_COUNTS);// && (fabs(vA_cps) <= VEL_TOL_CPS);
-    bool bDone = (labs(remL_counts) <= POS_TOL_COUNTS);//&& (fabs(vB_cps) <= VEL_TOL_CPS);
-    if (aDone && bDone) 
-    {
+    // Stop when close AND commanded speed ~0
+    bool rDone = (labs(remR_counts) <= POS_TOL_COUNTS) && (fabs(vCmdR_cps) < 1.0f);
+    bool lDone = (labs(remL_counts) <= POS_TOL_COUNTS) && (fabs(vCmdL_cps) < 1.0f);
+    if (rDone && lDone) {
       Serial.println("done");
-      driveMotor(M1, E1, 0);
-      driveMotor(M2, E2, 0);
       break;
     }
 
-    // Optional status @ ~5 Hz (mm & mm/s)
+    // Debug print (~10 Hz)
     static int div=0;
-    if (++div >= (int)(LOOP_HZ/100)) { div=0;
-      float posA_mm = (float)cR/ COUNTTODISTANCERATIO;
-      float posB_mm = (float)cL/ COUNTTODISTANCERATIO;
-      float vA_mmps = vA_cps / COUNTTODISTANCERATIO;
-      float vB_mmps = vB_cps / COUNTTODISTANCERATIO;
-      Serial.print("R "); Serial.print(posA_mm, 2); Serial.print(" mm  v ");
-      Serial.print(vA_mmps, 1); Serial.print(" mm/s ");
-      Serial.print(remR_counts); Serial.print(" counts remaining ");
-      Serial.print(uA, 2); Serial.print(" PWM");
-      Serial.print("  |  L ");
-      Serial.print(posB_mm, 2); Serial.print(" mm  v ");
-      Serial.print(vB_mmps, 1); Serial.print(" mm/s ");
-      Serial.print(remL_counts); Serial.print(" counts remaining ");
-      Serial.print(uB, 2); Serial.println(" PWM");
-    } //G01 X10 Y-40 F1
+    if (++div >= 10) { div=0;
+      float posR_mm = (float)cR / COUNTTODISTANCERATIO;
+      float posL_mm = (float)cL / COUNTTODISTANCERATIO;
+      float vR_mmps = vA_cps / COUNTTODISTANCERATIO;
+      float vL_mmps = vB_cps / COUNTTODISTANCERATIO;
+      Serial.print("R ");
+      Serial.print(posR_mm, 2); Serial.print(" mm  v ");
+      Serial.print(vR_mmps, 1); Serial.print(" mm/s  rem ");
+      Serial.print(remR_counts); Serial.print("  u ");
+      Serial.print(uR_clamped, 1);
+      Serial.print(" | L ");
+      Serial.print(posL_mm, 2); Serial.print(" mm  v ");
+      Serial.print(vL_mmps, 1); Serial.print(" mm/s  rem ");
+      Serial.print(remL_counts); Serial.print("  u ");
+      Serial.println(uL_clamped, 1);
+    }
   }
 
-  // Stop cleanly
+  // Stop cleanly G01 X10 Y10 F10
   driveMotor(M1, E1, 0);
   driveMotor(M2, E2, 0);
 }
+
