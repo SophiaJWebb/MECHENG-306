@@ -308,9 +308,9 @@ void move_left(int value) {
 
 void move_right(int value) {
   digitalWrite(M1, CCW);
-  digitalWrite(M2, CCW);
+  //digitalWrite(M2, CCW);
   analogWrite(E1, value);
-  analogWrite(E2, value);
+  //analogWrite(E2, value);
 }
 
 void move_top(int value) {
@@ -335,13 +335,16 @@ void back_up(int direction){
   // direction = 0 -> top,  direction = 1 -> right
   if (direction == 1){
     move_top(100);
-    while (delta_A_rel > -25){
+    while (delta_A_rel > -10){
       Serial.println(delta_A_rel);
       asm volatile("nop");
     }
   } else if (direction == 0) {
     move_right(100);
-    while (1){}
+    while (delta_A_rel > -10){
+      Serial.println(delta_A_rel);
+      asm volatile("nop");
+    }
   }
   analogWrite(E1, 0);
   analogWrite(E2, 0);
@@ -351,7 +354,7 @@ void back_up(int direction){
 void Homing() {
     // find left
   left_hit = false;
-  move_left(120);
+  move_left(200);
   while(!left_hit){
     asm volatile("nop");
   }
@@ -365,7 +368,7 @@ void Homing() {
 
   bottom_hit = false;
   // find bottom 
-  move_bottom(120);
+  move_bottom(200);
   while(!bottom_hit){
    asm volatile("nop");
   }
@@ -514,141 +517,3 @@ void bottom_limit_switch_hit() {
   }
   bottom_last_time = bottom_now;
 }
-
-
-// //-----Old limit switch and homing code-----//
-
-// // void Homing() {
-// //   // find bottom 
-// //   digitalWrite(M1,CW);
-// //   digitalWrite(M2,CCW);
-// //   analogWrite(E1, 200); //PWM Speed Control
-// //   analogWrite(E2, 200); //PWM Speed Control
-// //   while(!bottom_hit){
-// //    Serial.println("moving bottom ");
-// //    Serial.print(bottom_hit);
-// //   }
-// //   time_count = 0;
-// //   digitalWrite(M1,CCW);
-// //   digitalWrite(M2,CW);
-// //   analogWrite(E1, 150); //PWM Speed Control
-// //   analogWrite(E2, 150);
-
-// //   TCNT2 = 0; // Reset timer
-// //     //enable timer
-// //   TIMSK2 |= (1 << TOIE2);
-// //   while (!timeFlag) {
-// //    // Serial.println(time_count);
-// //   }
-// //   bottom_hit = false; // reset
-// //   digitalWrite(M1,CW);
-// //   digitalWrite(M2,CCW);
-// //   analogWrite(E1, 150); //PWM Speed Control
-// //   analogWrite(E2, 150); //PWM Speed Control
-// //   while(!bottom_hit){
-// //     //Serial.println("moving botttom 2");
-// //   }
-// //   bottom_hit = false; // ensure future limit switch hits stop motors 
-// //   timeFlag = false;
-// // // find left
-// //   digitalWrite(M1,CW);
-// //   digitalWrite(M2,CW);
-// //   analogWrite(E1, 200); //PWM Speed Control
-// //   analogWrite(E2, 200); //PWM Speed Control
-// //   while(!left_hit){
-// //   }
-// //   TCNT2 = 0; // Reset timer
-// //   time_count = 0;
-// //   digitalWrite(M1,CCW);
-// //   digitalWrite(M2,CCW);
-// //   analogWrite(E1, 150); //PWM Speed Control
-// //   analogWrite(E2, 150);
-// //   timeFlag = false;
-// //   while (!timeFlag) {
-// //   }
-// //   left_hit = false;
-// //   digitalWrite(M1,CW);
-// //   digitalWrite(M2,CW);
-// //   analogWrite(E1, 150); //PWM Speed Control
-// //   analogWrite(E2, 150); //PWM Speed Control
-// //   while(!left_hit){
-// //    // Serial.println("moving left 2");
-// //   }
-// //   left_hit = false; // ensure future limit switch hits stop motors 
-// //   // homing complete
-// //   currentX = 0;
-// //   currentY = 0;
-// //   homing = false;
-
-// //   TIMSK2 &= ~(1 << TOIE2);
-// //   timeFlag = false;
-// // }
-
-// // ISR(TIMER2_OVF_vect) {
-// //   time_count++;
-// //   if (time_count >= 63) { // approx 1 sec 
-// //     timeFlag = true;
-// //     time_count = 0;
-// //   }
-// // }
-
-// #ifndef LIMIT_SWITCH
-//   void left_limit_switch_hit() {
-//     left_now = millis();
-//     if (left_now - left_last_time > DEBOUNCE_DELAY_MS) {
-//       Serial.println("Left limit switch hit");
-//       left_hit = true;
-//       // Stop motors
-//       analogWrite(E1, 0);
-//       analogWrite(E2, 0);
-//     }
-//     left_last_time = left_now;
-//   }
-
-//   void right_limit_switch_hit() {
-//     right_now = millis();
-//     if (right_now - right_last_time > DEBOUNCE_DELAY_MS) {
-//       Serial.println("Right limit switch hit");
-//       right_hit = true;
-//       // Stop motors
-//       analogWrite(E1, 0);
-//       analogWrite(E2, 0);
-//     }
-//     right_last_time = right_now;
-
-//     right_hit = true;
-
-//     // Stop motors
-//     analogWrite(E1, 0);
-//     analogWrite(E2, 0);
-//   }
-
-//   void top_limit_switch_hit() {
-//     top_now = millis();
-//     if(top_now - top_last_time > DEBOUNCE_DELAY_MS) {
-//       Serial.println("Top limit switch hit");
-//       top_hit = true;
-
-//       // Stop motors
-//       analogWrite(E1, 0);
-//       analogWrite(E2, 0);
-
-//     }
-//     top_last_time = top_now;
-
-//     top_hit = true;
-//   }
-
-//   void bottom_limit_switch_hit() {
-//     bottom_now = millis();
-//     if (bottom_now - bottom_last_time > DEBOUNCE_DELAY_MS) {
-//       Serial.println("Bottom limit switch hit");
-//       //Serial.println(bottom_hit);
-//       bottom_hit = true;
-//       // Stop motors
-//       analogWrite(E1, 0);
-//       analogWrite(E2, 0);
-//     }
-//     bottom_last_time = bottom_now;
-//   }
-// #endif
