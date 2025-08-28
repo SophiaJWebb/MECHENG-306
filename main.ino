@@ -4,8 +4,9 @@
 
 #define LEFT_INTERRUPT_PIN 18
 #define RIGHT_INTERRUPT_PIN 19
-#define TOP_INTERRUPT_PIN 21
 #define BOTTOM_INTERRUPT_PIN 20
+#define TOP_INTERRUPT_PIN 21
+
 
 //motor set up 
 #define E1 5
@@ -14,10 +15,10 @@
 #define M2 7
 
 // Encoder setup
-#define RENCA 3
-#define RENCB 2
-#define LENCB 10
-#define LENCA 11
+#define RENCA 2
+#define RENCB 10
+#define LENCB 11
+#define LENCA 3
 
 float K_p = 20;
 float K_i = 0;
@@ -120,10 +121,6 @@ void setup() {
 
   attachInterrupt(digitalPinToInterrupt(RENCA), RENCA_ISR, RISING);
   attachInterrupt(digitalPinToInterrupt(LENCA), LENCA_ISR, RISING);
-
-  // --- Timer2 Normal Mode setup ---
-  TCCR2A = 0;   // Normal mode (WGM21:0 = 0)
-  TCCR2B |= (1 << CS22) | (1 << CS21) | (1 << CS20); // clk/1024 prescaler
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -180,11 +177,13 @@ void loop() {
       bool right_hit = false;
       bool top_hit = false;
       bool bottom_hit = false;
-      // Find the delta A (left motor) and delta B (right motor) as the inputs to PID function
-      delta_A_ref = inputs_to_encoder_count_delta_A(Parser.GetParameters()[0], Parser.GetParameters()[1]);
-      delta_B_ref = inputs_to_encoder_count_delta_B(Parser.GetParameters()[0], Parser.GetParameters()[1]);
 
-      PID_control(delta_A_ref, delta_B_ref);
+      moving(-40, -40, 120);
+      // Find the delta A (left motor) and delta B (right motor) as the inputs to PID function
+      // delta_A_ref = inputs_to_encoder_count_delta_A(Parser.GetParameters()[0], Parser.GetParameters()[1]);
+      // delta_B_ref = inputs_to_encoder_count_delta_B(Parser.GetParameters()[0], Parser.GetParameters()[1]);
+
+      // PID_control(delta_A_ref, delta_B_ref);
 
       STATE = IDLE;
       break;
@@ -241,7 +240,6 @@ void RENCA_ISR()
 void LENCA_ISR()
 {
     LDIRECTION = digitalRead(LENCB) ? CCW : CW;
-    
     m1counting();
 }
 
@@ -335,16 +333,15 @@ void back_up(int direction){
   delta_A_count_rel = 0;
   delta_A_rel = 0;
   // direction = 0 -> top,  direction = 1 -> right
-  if (direction){
+  if (direction == 1){
     move_top(100);
-    
-  } else{
+    while (delta_A_rel > -25){
+      Serial.println(delta_A_rel);
+      asm volatile("nop");
+    }
+  } else if (direction == 0) {
     move_right(100);
-  }
-  while (delta_A_rel < 10 | delta_A_rel < -10){
-    Serial.println("delta_A_rel: ");
-    Serial.println(delta_A_rel);
-    asm volatile("nop");
+    while (1){}
   }
   analogWrite(E1, 0);
   analogWrite(E2, 0);
@@ -352,31 +349,33 @@ void back_up(int direction){
 
 //---------------HOMING function--------------//
 void Homing() {
-  // find bottom 
-  move_bottom(120);
-  while(!bottom_hit){
-   asm volatile("nop");
-  }
-  back_up(top);
-  bottom_hit = false; // reset
-  move_bottom(100);
-  while(!bottom_hit){
-    asm volatile("nop");
-  }
-  bottom_hit = false; // reset
-
-// find left
+    // find left
+  left_hit = false;
   move_left(120);
   while(!left_hit){
     asm volatile("nop");
   }
-  back_up(right);
+  back_up(0); // Right
   left_hit = false; //reset
   move_left(100);
   while(!left_hit){
    asm volatile("nop");
   }
   left_hit = false; // reset
+
+  bottom_hit = false;
+  // find bottom 
+  move_bottom(120);
+  while(!bottom_hit){
+   asm volatile("nop");
+  }
+  back_up(1); // Top
+  bottom_hit = false; // reset
+  move_bottom(100);
+  while(!bottom_hit){
+    asm volatile("nop");
+  }
+  bottom_hit = false; // reset
 
   // homing complete
   currentX = 0;
@@ -458,6 +457,7 @@ void left_limit_switch_hit() {
   left_now = millis();
   if (left_now - left_last_time > DEBOUNCE_DELAY_MS) {
     Serial.println("Left limit switch hit");
+    //Serial.println(bottom_hit);
     if (!left_hit){
       analogWrite(E1, 0);
       analogWrite(E2, 0);
@@ -487,6 +487,7 @@ void right_limit_switch_hit() {
 void top_limit_switch_hit() {
   top_now = millis();
   if(top_now - top_last_time > DEBOUNCE_DELAY_MS) {
+    Serial.println("Top limit switch hit");
     analogWrite(E1, 0);
     analogWrite(E2, 0);
     top_hit = true;
