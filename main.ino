@@ -373,44 +373,46 @@ void back_up(int direction){
 //---------------HOMING function--------------//
 void Homing() {
   homing = true;
-    // find left
-  left_hit = false;
-  if (error_flag){return;}
-  move_left(200);
-  while(!left_hit & !error_flag){
-    asm("nop");
-    if (error_flag){return;}
-  }
-  Serial.println("left while loop");
-  if (error_flag){return;}
-  back_up(0); // Right
-  left_hit = false; //reset
-  if (error_flag){return;}
-  move_left(100);
-  while(!left_hit & !error_flag){
-    asm("nop");
-    if (error_flag){return;}
-  }
-  left_hit = false; // reset
 
-  bottom_hit = false;
-  // find bottom 
-  if (error_flag){return;}
-  move_bottom(200);
-  while(!bottom_hit & !error_flag){
-    asm("nop");
+  if (digitalRead(LEFT_INTERRUPT_PIN) == 0){
+    left_hit = false;
     if (error_flag){return;}
-  }
-  if (error_flag){return;}
-  back_up(1); // Top
-  bottom_hit = false; // reset
-  if (error_flag){return;}
-  move_bottom(100);
-  while(!bottom_hit & !error_flag){
-    asm("nop");
+    move_left(200);
+    while(!left_hit & !error_flag){
+      asm("nop");
+      if (error_flag){return;}
+    }
     if (error_flag){return;}
+    back_up(0); // Right
+    left_hit = false; //reset
+    if (error_flag){return;}
+    move_left(100);
+    while(!left_hit & !error_flag){
+      asm("nop");
+      if (error_flag){return;}
+    }
+    left_hit = false; // reset
   }
-  bottom_hit = false; // reset
+  
+  if (digitalRead(BOTTOM_INTERRUPT_PIN) == 0){
+    bottom_hit = false;
+    if (error_flag){return;}
+    move_bottom(200);
+    while(!bottom_hit & !error_flag){
+      asm("nop");
+      if (error_flag){return;}
+    }
+    if (error_flag){return;}
+    back_up(1); // Top
+    bottom_hit = false; // reset
+    if (error_flag){return;}
+    move_bottom(100);
+    while(!bottom_hit & !error_flag){
+      asm("nop");
+      if (error_flag){return;}
+    }
+    bottom_hit = false; // reset
+  }
 
   // homing complete
   currentX = 0;
