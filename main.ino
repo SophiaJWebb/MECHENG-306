@@ -2,10 +2,10 @@
 #define LIMIT_SWITCH
 #define DEBOUNCE_DELAY_MS 500
 
-#define LEFT_INTERRUPT_PIN 18
-#define RIGHT_INTERRUPT_PIN 19
-#define BOTTOM_INTERRUPT_PIN 20
-#define TOP_INTERRUPT_PIN 21
+#define LEFT_INTERRUPT_PIN 13
+#define RIGHT_INTERRUPT_PIN 12
+#define BOTTOM_INTERRUPT_PIN 11
+#define TOP_INTERRUPT_PIN 10
 
 
 //motor set up 
@@ -15,10 +15,10 @@
 #define M2 7
 
 // Encoder setup
-#define RENCA 2
-#define RENCB 10
-#define LENCB 11
-#define LENCA 3
+#define RENCA 21
+#define RENCB 20
+#define LENCB 19
+#define LENCA 18
 
 float K_p = 20;
 float K_i = 0;
@@ -114,6 +114,11 @@ void setup() {
 
   pinMode(RENCB, INPUT);
   pinMode(LENCB, INPUT);
+
+  pinMode(M1, OUTPUT);
+  pinMode(M2, OUTPUT);
+  pinMode(E1, OUTPUT);
+  pinMode(E2, OUTPUT);
 
   Serial.begin(9600);
   attachInterrupt(digitalPinToInterrupt(LEFT_INTERRUPT_PIN), left_limit_switch_hit, RISING);
@@ -328,9 +333,9 @@ void move_left(int value) {
 
 void move_right(int value) {
   digitalWrite(M1, CCW);
-  //digitalWrite(M2, CCW);
+  digitalWrite(M2, CCW);
   analogWrite(E1, value);
-  //analogWrite(E2, value);
+  analogWrite(E2, value);
 }
 
 void move_top(int value) {
@@ -355,13 +360,13 @@ void back_up(int direction){
   // direction = 0 -> top,  direction = 1 -> right
   if (direction == 1){
     move_top(100);
-    while (delta_A_rel > -10 & !error_flag){
+    while (delta_A_rel > -10 && !error_flag){
       asm("nop");
       if (error_flag){return;}
     }
   } else if (direction == 0) {
     move_right(100);
-    while (delta_A_rel > -10 & !error_flag){
+    while (delta_A_rel > -10 && !error_flag){
       asm("nop");
       if (error_flag){return;}
     }
@@ -378,7 +383,7 @@ void Homing() {
     left_hit = false;
     if (error_flag){return;}
     move_left(200);
-    while(!left_hit & !error_flag){
+    while(!left_hit && !error_flag){
       asm("nop");
       if (error_flag){return;}
     }
@@ -387,7 +392,7 @@ void Homing() {
     left_hit = false; //reset
     if (error_flag){return;}
     move_left(100);
-    while(!left_hit & !error_flag){
+    while(!left_hit && !error_flag){
       asm("nop");
       if (error_flag){return;}
     }
@@ -398,7 +403,7 @@ void Homing() {
     bottom_hit = false;
     if (error_flag){return;}
     move_bottom(200);
-    while(!bottom_hit & !error_flag){
+    while(!bottom_hit && !error_flag){
       asm("nop");
       if (error_flag){return;}
     }
@@ -407,7 +412,7 @@ void Homing() {
     bottom_hit = false; // reset
     if (error_flag){return;}
     move_bottom(100);
-    while(!bottom_hit & !error_flag){
+    while(!bottom_hit && !error_flag){
       asm("nop");
       if (error_flag){return;}
     }
