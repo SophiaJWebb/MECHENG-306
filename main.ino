@@ -35,6 +35,8 @@ bool right_hit = false;
 bool top_hit = false;
 bool bottom_hit = false;
 
+bool error_flag = false;
+
 //limit switch debouncing 
 int long left_last_time = 0;
 int long left_now = 0;
@@ -131,65 +133,83 @@ void loop() {
   //Homing();
 
   while (1) {
-  switch (STATE) {
-    case IDLE: {
-      Serial.println("State Idle");
-      Serial.println("Enter GCode command");
-      while (Serial.available() == 0){
-      }
-      command = Serial.readStringUntil('\n');  // Read until newline
-      STATE = PARSING;
-      break;
-    }
-
-    case PARSING: {
-      int state = Parser.ExecuteCommand(command.c_str());
-      if (state == 0){
-        STATE = IDLE;
-        break;
-      }
-      if (state == 1){
-        STATE = HOMING;
-        break;
-      }
-      if (state == 2){
-        if (Parser.ValidateParameters(currentX, currentY)){
-          STATE = MOVING;
+    switch (STATE) {
+      case IDLE: {
+        error_flag= false;
+        Serial.println("State Idle");
+        Serial.println("Enter GCode command");
+        while (Serial.available() == 0){
         }
-        else {
+        command = Serial.readStringUntil('\n');  // Read until newline
+        STATE = PARSING;
+        break;
+      }
+
+      case PARSING: {
+        int state = Parser.ExecuteCommand(command.c_str());
+        if (state == 0){
+          STATE = IDLE;
+          break;
+        }
+        if (state == 1){
+          STATE = HOMING;
+          break;
+        }
+        if (state == 2){
+          if (Parser.ValidateParameters(currentX, currentY)){
+            STATE = MOVING;
+          }
+          else {
+            STATE = IDLE;
+          }
+          break;
+        }
+        break;
+      }
+      
+      case HOMING: {
+        Serial.println("Running homing routine");
+        homing = true; 
+        Homing();
+        Serial.println("left homing");
+        if (!error_flag){
           STATE = IDLE;
         }
         break;
       }
-      break;
-    }
-    
-    case HOMING: {
-      Serial.println("Running homing routine");
-      homing = true; 
-      Homing();
-      STATE = IDLE;
-      break;
-    }
-    case MOVING: {
-      Serial.println("Running moving routine");
-      bool left_hit = false;
-      bool right_hit = false;
-      bool top_hit = false;
-      bool bottom_hit = false;
+      case MOVING: {
+        Serial.println("Running moving routine");
+        bool left_hit = false;
+        bool right_hit = false;
+        bool top_hit = false;
+        bool bottom_hit = false;
+        
+        //Find the delta A (left motor) and delta B (right motor) as the inputs to PID function
+        delta_A_ref = inputs_to_encoder_count_delta_A(Parser.GetParameters()[0], Parser.GetParameters()[1]);
+        delta_B_ref = inputs_to_encoder_count_delta_B(Parser.GetParameters()[0], Parser.GetParameters()[1]);
 
-      moving(-40, -40, 120);
-      // Find the delta A (left motor) and delta B (right motor) as the inputs to PID function
-      // delta_A_ref = inputs_to_encoder_count_delta_A(Parser.GetParameters()[0], Parser.GetParameters()[1]);
-      // delta_B_ref = inputs_to_encoder_count_delta_B(Parser.GetParameters()[0], Parser.GetParameters()[1]);
-
-      // PID_control(delta_A_ref, delta_B_ref);
-
-      STATE = IDLE;
-      break;
-    }
+        // PID_control(delta_A_ref, delta_B_ref);
+        if (!error_flag){
+          STATE = IDLE;
+        }
+        break;
+      }
 
       case ERROR: {
+        Serial.println("State Error");
+        int state = 3;
+        while (state != 0){
+          Serial.println("Enter GCode command");
+          while (Serial.available() == 0){
+          }
+          command = Serial.readStringUntil('\n');  // Read until newline
+
+          state = Parser.ExecuteCommand(command.c_str());
+          if (state == 1 | state == 2){
+            Serial.println("Cannot run command from error state");
+          }
+        }
+        STATE = IDLE;
         break;
       }
     }
@@ -335,15 +355,15 @@ void back_up(int direction){
   // direction = 0 -> top,  direction = 1 -> right
   if (direction == 1){
     move_top(100);
-    while (delta_A_rel > -10){
+    while (delta_A_rel > -10 & !error_flag){
       Serial.println(delta_A_rel);
-      asm volatile("nop");
+      if (error_flag){return;}
     }
   } else if (direction == 0) {
     move_right(100);
-    while (delta_A_rel > -10){
+    while (delta_A_rel > -10 & !error_flag){
       Serial.println(delta_A_rel);
-      asm volatile("nop");
+      if (error_flag){return;}
     }
   }
   analogWrite(E1, 0);
@@ -352,31 +372,46 @@ void back_up(int direction){
 
 //---------------HOMING function--------------//
 void Homing() {
+  homing = true;
     // find left
   left_hit = false;
+  if (error_flag){return;}
   move_left(200);
-  while(!left_hit){
-    asm volatile("nop");
+  while(!left_hit & !error_flag){
+    Serial.print("Error flag: ");
+    Serial.println(error_flag);
+    if (error_flag){return;}
   }
+  if (error_flag){return;}
   back_up(0); // Right
   left_hit = false; //reset
+  if (error_flag){return;}
   move_left(100);
-  while(!left_hit){
-   asm volatile("nop");
+  while(!left_hit & !error_flag){
+    Serial.print("Error flag: ");
+    Serial.println(error_flag);
+   if (error_flag){return;}
   }
   left_hit = false; // reset
 
   bottom_hit = false;
   // find bottom 
+  if (error_flag){return;}
   move_bottom(200);
-  while(!bottom_hit){
-   asm volatile("nop");
+  while(!bottom_hit & !error_flag){
+    Serial.print("Error flag: ");
+    Serial.println(error_flag);
+   if (error_flag){return;}
   }
+  if (error_flag){return;}
   back_up(1); // Top
   bottom_hit = false; // reset
+  if (error_flag){return;}
   move_bottom(100);
-  while(!bottom_hit){
-    asm volatile("nop");
+  while(!bottom_hit & !error_flag){
+    Serial.print("Error flag: ");
+    Serial.println(error_flag);
+    if (error_flag){return;}
   }
   bottom_hit = false; // reset
 
@@ -467,7 +502,8 @@ void left_limit_switch_hit() {
     }
     left_hit = true;
     if (!homing){
-      STATE = IDLE;
+      error_flag = true;
+      STATE = ERROR;
     }
   }
   left_last_time = left_now;
@@ -480,9 +516,8 @@ void right_limit_switch_hit() {
     analogWrite(E1, 0);
     analogWrite(E2, 0);
     right_hit = true;
-    if (!homing){
-      STATE = IDLE;
-    }
+    STATE = ERROR;
+    error_flag = true;
   }
   right_last_time = right_now;
 }
@@ -494,9 +529,8 @@ void top_limit_switch_hit() {
     analogWrite(E1, 0);
     analogWrite(E2, 0);
     top_hit = true;
-    if (!homing){
-      STATE = IDLE;
-    }
+    STATE = ERROR;
+    error_flag = true;
   }
   top_last_time = top_now;
 }
@@ -512,7 +546,8 @@ void bottom_limit_switch_hit() {
     }
     bottom_hit = true;
     if (!homing){
-      STATE = IDLE;
+      STATE = ERROR;
+      error_flag = true;
     }
   }
   bottom_last_time = bottom_now;
