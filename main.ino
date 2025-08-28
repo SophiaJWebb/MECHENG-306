@@ -356,13 +356,13 @@ void back_up(int direction){
   if (direction == 1){
     move_top(100);
     while (delta_A_rel > -10 & !error_flag){
-      Serial.println(delta_A_rel);
+      asm("nop");
       if (error_flag){return;}
     }
   } else if (direction == 0) {
     move_right(100);
     while (delta_A_rel > -10 & !error_flag){
-      Serial.println(delta_A_rel);
+      asm("nop");
       if (error_flag){return;}
     }
   }
@@ -378,19 +378,18 @@ void Homing() {
   if (error_flag){return;}
   move_left(200);
   while(!left_hit & !error_flag){
-    Serial.print("Error flag: ");
-    Serial.println(error_flag);
+    asm("nop");
     if (error_flag){return;}
   }
+  Serial.println("left while loop");
   if (error_flag){return;}
   back_up(0); // Right
   left_hit = false; //reset
   if (error_flag){return;}
   move_left(100);
   while(!left_hit & !error_flag){
-    Serial.print("Error flag: ");
-    Serial.println(error_flag);
-   if (error_flag){return;}
+    asm("nop");
+    if (error_flag){return;}
   }
   left_hit = false; // reset
 
@@ -399,9 +398,8 @@ void Homing() {
   if (error_flag){return;}
   move_bottom(200);
   while(!bottom_hit & !error_flag){
-    Serial.print("Error flag: ");
-    Serial.println(error_flag);
-   if (error_flag){return;}
+    asm("nop");
+    if (error_flag){return;}
   }
   if (error_flag){return;}
   back_up(1); // Top
@@ -409,8 +407,7 @@ void Homing() {
   if (error_flag){return;}
   move_bottom(100);
   while(!bottom_hit & !error_flag){
-    Serial.print("Error flag: ");
-    Serial.println(error_flag);
+    asm("nop");
     if (error_flag){return;}
   }
   bottom_hit = false; // reset
