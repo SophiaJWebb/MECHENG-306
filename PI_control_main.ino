@@ -8,8 +8,8 @@
 
 // ----- Board: Arduino MEGA external-interrupt pins: 2,3,18,19,20,21 -----
 // FIX: move limit switches to real interrupt pins on MEGA
-#define LEFT_INTERRUPT_PIN   18
-#define RIGHT_INTERRUPT_PIN  19
+#define LEFT_INTERRUPT_PIN   19
+#define RIGHT_INTERRUPT_PIN  18
 #define TOP_INTERRUPT_PIN    20
 #define BOTTOM_INTERRUPT_PIN 21
 
@@ -31,8 +31,6 @@ const bool L_ENCODER_REVERSED = true;   // FIX: set true/false to make +Y behave
 // ======== FEEDFORWARD / FRICTION ========
 float KVFF_R = 0.04f;
 float KVFF_L = 0.04f;
-float KAFF_R = 0.0f;
-float KAFF_L = 0.0f;
 float KF_R = 10.0f;
 float KF_L = 10.0f;
 float MIN_PWM = 0.0f;
@@ -55,6 +53,20 @@ unsigned long left_last_time = 0, left_now = 0;
 unsigned long right_last_time = 0, right_now = 0;
 unsigned long top_last_time = 0, top_now = 0;
 unsigned long bottom_last_time = 0, bottom_now = 0;
+
+bool error_flag = false;
+
+bool homing = false;
+bool justfinishedhoming=false;
+
+enum directions {
+  right,
+  top
+};
+enum direction {
+  CW,
+  CCW
+};
 
 // =================== APP STATE ===================
 float currentX = 0;
@@ -141,13 +153,13 @@ void setup() {
   pinMode(BOTTOM_INTERRUPT_PIN, INPUT_PULLUP);
 
   attachInterrupt(digitalPinToInterrupt(LEFT_INTERRUPT_PIN),
-                  left_limit_switch_hit, FALLING);
+                  left_limit_switch_hit, RISING);
   attachInterrupt(digitalPinToInterrupt(RIGHT_INTERRUPT_PIN),
-                  right_limit_switch_hit, FALLING);
+                  right_limit_switch_hit, RISING);
   attachInterrupt(digitalPinToInterrupt(TOP_INTERRUPT_PIN),
-                  top_limit_switch_hit, FALLING);
+                  top_limit_switch_hit, RISING);
   attachInterrupt(digitalPinToInterrupt(BOTTOM_INTERRUPT_PIN),
-                  bottom_limit_switch_hit, FALLING);
+                  bottom_limit_switch_hit, RISING);
 
   // ----- Encoders -----
   pinMode(RENCA, INPUT_PULLUP);
@@ -176,6 +188,11 @@ void loop() {
   while (1) {
     switch (STATE) {
       case IDLE: {
+        error_flag= false;
+        left_hit= false;
+        right_hit=false;
+        top_hit=false;
+        bottom_hit=false;
         driveMotor(M1, E1, 0);
         driveMotor(M2, E2, 0);
         Serial.println("State Idle");
@@ -187,18 +204,40 @@ void loop() {
       }
 
       case PARSING: {
+        // double currentX=(motorL.getAbsolutemm()+motorR.getAbsolutemm())/2;
+        // double currentY=(motorL.getAbsolutemm()-motorR.getAbsolutemm())/2;
         int st = Parser.ExecuteCommand(command.c_str());
         if (st == 0) { STATE = IDLE; break; }
         if (st == 1) { STATE = HOMING; break; }
-        if (st == 2) { STATE = MOVING; break; }
+        if (st == 2) {
+          Serial.print("X: ");
+          Serial.print(currentX);
+          Serial.print("Y: ");
+          Serial.println(currentY);
+          if (Parser.ValidateParameters(currentX, currentY)){
+            STATE = MOVING; break;
+          }
+          else {
+            STATE = IDLE; break;
+          }
+        }
         STATE = ERROR;
         break;
       }
 
       case HOMING: {
         Serial.println("Running homing routine");
+        homing = true; 
         Homing();
-        STATE = IDLE;
+        Serial.println("left homing");
+          double currentX=(motorL.getAbsolutemm()+motorR.getAbsolutemm())/2;
+          double currentY=(motorL.getAbsolutemm()-motorR.getAbsolutemm())/2;
+          Serial.print("X: ");
+          Serial.print(currentX);
+          Serial.print("Y: ");
+          Serial.println(currentY);        if (!error_flag){
+          STATE = IDLE;
+        }
         break;
       }
 
@@ -233,16 +272,31 @@ void loop() {
         Serial.print("deltaL tick: "); Serial.println(delta_L_ticks);
 
         PI_control(delta_R_ticks, delta_L_ticks);
+        justfinishedhoming=false;
 
-        currentX += dX_mm;
-        currentY += dY_mm;
+        currentX=(motorL.getAbsolutemm()+motorR.getAbsolutemm())/2;
+        currentY=(motorL.getAbsolutemm()-motorR.getAbsolutemm())/2;
 
-        STATE = IDLE;
+        if (!error_flag){
+          STATE = IDLE;
+        }
         break;
       }
 
       case ERROR: {
-        Serial.println("ERROR state");
+        Serial.println("State Error");
+        int state = 3;
+        while (state != 0){
+          Serial.println("Enter GCode command");
+          while (Serial.available() == 0){
+          }
+          command = Serial.readStringUntil('\n');  // Read until newline
+
+          state = Parser.ExecuteCommand(command.c_str());
+          if (state == 1 | state == 2){
+            Serial.println("Cannot run command from error state");
+          }
+        }
         STATE = IDLE;
         break;
       }
@@ -278,93 +332,140 @@ void left_limit_switch_hit() {
   left_now = millis();
   if (left_now - left_last_time > DEBOUNCE_DELAY_MS) {
     Serial.println("Left limit switch hit");
-    analogWrite(E1, 0); analogWrite(E2, 0);
-    left_hit = true;
+    //Serial.println(bottom_hit);
+    if (!justfinishedhoming){
+      if (!left_hit){
+        analogWrite(E1, 0);
+        analogWrite(E2, 0);
+      }
+      left_hit = true;
+      if (!homing){
+        error_flag = true;
+        STATE = ERROR;
+      }
+    }
+    left_last_time = left_now;
   }
-  left_last_time = left_now;
 }
+
 void right_limit_switch_hit() {
   right_now = millis();
   if (right_now - right_last_time > DEBOUNCE_DELAY_MS) {
     Serial.println("Right limit switch hit");
-    analogWrite(E1, 0); analogWrite(E2, 0);
+    analogWrite(E1, 0);
+    analogWrite(E2, 0);
     right_hit = true;
+    STATE = ERROR;
+    error_flag = true;
   }
   right_last_time = right_now;
 }
+
 void top_limit_switch_hit() {
   top_now = millis();
-  if (top_now - top_last_time > DEBOUNCE_DELAY_MS) {
+  if(top_now - top_last_time > DEBOUNCE_DELAY_MS) {
     Serial.println("Top limit switch hit");
-    analogWrite(E1, 0); analogWrite(E2, 0);
+    analogWrite(E1, 0);
+    analogWrite(E2, 0);
     top_hit = true;
+    STATE = ERROR;
+    error_flag = true;
   }
   top_last_time = top_now;
 }
+
 void bottom_limit_switch_hit() {
   bottom_now = millis();
   if (bottom_now - bottom_last_time > DEBOUNCE_DELAY_MS) {
     Serial.println("Bottom limit switch hit");
-    analogWrite(E1, 0); analogWrite(E2, 0);
+    //Serial.println(bottom_hit);
+  if (!justfinishedhoming){
+    if (!bottom_hit){
+      analogWrite(E1, 0);
+      analogWrite(E2, 0);
+    }
     bottom_hit = true;
+    if (!homing){
+      STATE = ERROR;
+      error_flag = true;
+    }
+  }
   }
   bottom_last_time = bottom_now;
 }
 
-// =================== HOMING (simple) ===================
+void back_up(int direction){
+  Serial.println("in back up");
+  motorL.resetEncoder();
+  motorL.setDirection(1);
+  // direction = 0 -> top,  direction = 1 -> right
+  if (direction == 1){
+    move_top(100);
+    while (motorL.convertTicksToMillimeters(motorL.getEncoderTicks()) < 15 && !error_flag){
+      asm("nop");
+      if (error_flag){return;}
+    }
+  } else if (direction == 0) {
+    move_right(100);
+    while (motorL.convertTicksToMillimeters(motorL.getEncoderTicks()) < 15 && !error_flag){
+      asm("nop");
+      if (error_flag){return;}
+    }
+  }
+  driveMotor(M2, E2, 0);
+  driveMotor(M1, E1, 0);
+}
+
 void Homing() {
-  // NOTE: adjust directions if needed for your mechanics.
-  digitalWrite(M1, LOW);  // arbitrary "CCW"
-  digitalWrite(M2, HIGH); // arbitrary "CW"
-  analogWrite(E1, 200);
-  analogWrite(E2, 200);
-  while (!bottom_hit) { /* wait */ }
-  analogWrite(E1, 0); analogWrite(E2, 0);
+  homing = true;
 
-  // Nudge off
-  digitalWrite(M1, HIGH);
-  digitalWrite(M2, LOW);
-  analogWrite(E1, 100);
-  analogWrite(E2, 100);
-  delay(2000);
-  analogWrite(E1, 0); analogWrite(E2, 0);
+ // if (digitalRead(LEFT_INTERRUPT_PIN) == 0){
+    left_hit = false;
+    if (error_flag){return;}
+    move_left(200);
+    while(!left_hit && !error_flag){
+      asm("nop");
+      if (error_flag){return;}
+    }
+    if (error_flag){return;}
+    back_up(0); // Right
+    left_hit = false; //reset
+    if (error_flag){return;}
+    move_left(80);
+    while(!left_hit && !error_flag){
+      asm("nop");
+      if (error_flag){return;}
+    }
+    left_hit = false; // reset
+ // }
+  
+//  if (digitalRead(BOTTOM_INTERRUPT_PIN) == 0){
+    bottom_hit = false;
+    if (error_flag){return;}
+    move_bottom(200);
+    while(!bottom_hit && !error_flag){
+      asm("nop");
+      if (error_flag){return;}
+    }
+    if (error_flag){return;}
+    back_up(1); // Top
+    bottom_hit = false; // reset
+    if (error_flag){return;}
+    move_bottom(80);
+    while(!bottom_hit && !error_flag){
+      asm("nop");
+      if (error_flag){return;}
+    }
+    bottom_hit = false; // reset
+//  }
 
-  bottom_hit = false;
-  digitalWrite(M1, LOW);
-  digitalWrite(M2, HIGH);
-  analogWrite(E1, 100);
-  analogWrite(E2, 100);
-  while (!bottom_hit) { /* wait */ }
-  analogWrite(E1, 0); analogWrite(E2, 0);
-
-  // Left homing
-  bottom_hit = false;
-  digitalWrite(M1, HIGH);
-  digitalWrite(M2, HIGH);
-  analogWrite(E1, 200);
-  analogWrite(E2, 200);
-  while (!left_hit) { /* wait */ }
-  analogWrite(E1, 0); analogWrite(E2, 0);
-
-  // Nudge off
-  digitalWrite(M1, LOW);
-  digitalWrite(M2, LOW);
-  analogWrite(E1, 100);
-  analogWrite(E2, 100);
-  delay(2000);
-  analogWrite(E1, 0); analogWrite(E2, 0);
-
-  left_hit = false;
-  digitalWrite(M1, HIGH);
-  digitalWrite(M2, HIGH);
-  analogWrite(E1, 100);
-  analogWrite(E2, 100);
-  while (!left_hit) { /* wait */ }
-  analogWrite(E1, 0); analogWrite(E2, 0);
-  left_hit = false;
-
+  // homing complete
   currentX = 0;
   currentY = 0;
+  motorR.hardResetEncoder();
+  motorL.hardResetEncoder();
+  homing = false;
+  justfinishedhoming=true;
 }
 
 // =================== PI-ONLY MOVE (counts + counts/s) ===================
@@ -407,15 +508,15 @@ void PI_control(long delta_R_ref_in, long delta_L_ref_in) {
     if ((long)(now - tNext) < 0) continue;
     tNext += (unsigned long)(1000.0f * DT);
 
+    long cR = motorR.getEncoderTicks();
+    long cL = motorL.getEncoderTicks();
+
     if (left_hit || right_hit || top_hit || bottom_hit) {
       driveMotor(M2, E2, 0);
       driveMotor(M1, E1, 0);
       Serial.println("ABORT: limit switch hit");
       return;
     }
-
-    long cR = motorR.getEncoderTicks();
-    long cL = motorL.getEncoderTicks();
 
     long dR = cR - lastR; lastR = cR;
     long dL = cL - lastL; lastL = cL;
@@ -433,13 +534,11 @@ void PI_control(long delta_R_ref_in, long delta_L_ref_in) {
     float eR = vCmdR_cps - vR_cps;
     float eL = vCmdL_cps - vL_cps;
 
-    float aCmdR_cps2 = (vCmdR_cps - vCmdR_prev) / DT;
-    float aCmdL_cps2 = (vCmdL_cps - vCmdL_prev) / DT;
     vCmdR_prev = vCmdR_cps;
     vCmdL_prev = vCmdL_cps;
 
-    float ffR = KVFF_R * vCmdR_cps + KAFF_R * aCmdR_cps2;
-    float ffL = KVFF_L * vCmdL_cps + KAFF_L * aCmdL_cps2;
+    float ffR = KVFF_R * vCmdR_cps;
+    float ffL = KVFF_L * vCmdL_cps;
     if (fabs(vCmdR_cps) > 1.0f) ffR += KF_R * sgnf(vCmdR_cps);
     if (fabs(vCmdL_cps) > 1.0f) ffL += KF_L * sgnf(vCmdL_cps);
 
@@ -494,4 +593,33 @@ void PI_control(long delta_R_ref_in, long delta_L_ref_in) {
 
   driveMotor(M2, E2, 0);
   driveMotor(M1, E1, 0);
+}
+
+//------------------Move funtions------------------//
+void move_left(int value) {
+  digitalWrite(M1, CW);
+  digitalWrite(M2, CW);
+  analogWrite(E1, value);
+  analogWrite(E2, value);
+}
+
+void move_right(int value) {
+  digitalWrite(M1, CCW);
+  digitalWrite(M2, CCW);
+  analogWrite(E1, value);
+  analogWrite(E2, value);
+}
+
+void move_top(int value) {
+  digitalWrite(M1, CW);
+  digitalWrite(M2, CCW);
+  analogWrite(E1, value);
+  analogWrite(E2, value);
+}
+
+void move_bottom(int value) {
+  digitalWrite(M1, CCW);
+  digitalWrite(M2, CW);
+  analogWrite(E1, value);
+  analogWrite(E2, value);
 }
