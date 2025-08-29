@@ -9,7 +9,9 @@ public:
     Encoder();
     void countTicks(int amount);
     void resetEncoder();
+    void hardResetEncoder();
     long getEncoderTicks() const;
+    double getAbsolutemm() const;
     double getMillimeters() const;
     double convertTicksToMillimeters(long ticks);
     long convertMillimetersToTicks(double millimeters);
@@ -25,7 +27,7 @@ private:
     long absoluteEncoderTicks_;
     long encoderTicks_;
     double millimeters_;
-    const double millimetersToTicks_ = 65.618946; // For 1mm 65.61 ticks are needed
+    const double millimetersToTicks_ = 43.74; // For 1mm 65.61 ticks are needed
     long lastEncoderTicks_;
     int direction_;
 };
