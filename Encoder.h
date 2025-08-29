@@ -15,6 +15,8 @@ public:
     long convertMillimetersToTicks(double millimeters);
     void setLastEncoderTicks(long ticks);
     long getLastEncoderTicks() const;
+    void setDirection(int dir);
+    int getDirection() const;
     
     ~Encoder();
 
@@ -25,6 +27,7 @@ private:
     double millimeters_;
     const double millimetersToTicks_ = 65.618946; // For 1mm 65.61 ticks are needed
     long lastEncoderTicks_;
+    int direction_;
 };
 
 #endif

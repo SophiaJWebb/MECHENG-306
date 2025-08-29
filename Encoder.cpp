@@ -30,6 +30,16 @@ void Encoder::setLastEncoderTicks(long ticks)
     lastEncoderTicks_ = ticks;
 }
 
+void Encoder::setDirection(int dir)
+{
+    direction_=dir;
+}
+
+int Encoder::getDirection() const
+{
+    return direction_;
+}
+
 long Encoder::convertMillimetersToTicks(double millimeters)
 {
     long convertedTicks = millimeters * millimetersToTicks_;

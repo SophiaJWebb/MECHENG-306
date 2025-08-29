@@ -42,7 +42,7 @@ float K_p = 0.05f;
 float K_i = 0.02f;
 
 // =================== MECHANICS / UNITS ===================
-const float COUNTTODISTANCERATIO = 65.618946f;  // counts per mm
+const float COUNTTODISTANCERATIO = 43.74f;  // counts per mm
 
 // =================== STATE FLAGS (limit switches) ===================
 volatile bool left_hit = false;
