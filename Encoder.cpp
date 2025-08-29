@@ -6,6 +6,7 @@ Encoder::Encoder()
     encoderTicks_ = 0;
     millimeters_ = 0.0;
     lastEncoderTicks_ = 0;
+    absoluteEncoderTicks_=0;
 }
 
 Encoder::~Encoder()
@@ -18,6 +19,14 @@ void Encoder::resetEncoder()
     encoderTicks_ = 0;
     millimeters_ = 0.0;
     lastEncoderTicks_ = 0;
+}
+
+void Encoder::hardResetEncoder()
+{
+    encoderTicks_ = 0;
+    millimeters_ = 0.0;
+    lastEncoderTicks_ = 0;
+    absoluteEncoderTicks_=0;
 }
 
 long Encoder::getLastEncoderTicks() const
@@ -67,5 +76,11 @@ long Encoder::getEncoderTicks() const
 double Encoder::getMillimeters() const
 {
     return millimeters_;
+}
+
+double Encoder::getAbsolutemm() const
+{
+  Encoder encoder;
+  return encoder.convertTicksToMillimeters(absoluteEncoderTicks_);
 }
 
