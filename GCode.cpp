@@ -88,7 +88,7 @@ void GCodeParser::extractParameters(String tokens[], int tokenCount){
 bool GCodeParser::ValidateParameters(float currentX, float currentY) {
     // validate x and y distances
     if ((parameters[0] + currentX) > 225 || 
-        (parameters[1] + currentY) > 140 || 
+        (parameters[1] + currentY) > 145 || 
         (parameters[1] + currentY) < 0 || 
         (parameters[0] + currentX) < 0) {
         Serial.println("Distance entered exceeds limits");
@@ -131,3 +131,4 @@ int GCodeParser::ExecuteCommand(const String& cmd) {
     tokenize(command, tokens, tokenCount);
     return extractCommand(tokens, tokenCount);
 }
+
