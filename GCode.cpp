@@ -39,10 +39,6 @@ int GCodeParser::extractCommand(String tokens[], int tokenCount) {
     // if G01, extract parameters
     else if (tokens[0] == "G01") {
         extractParameters(tokens, tokenCount);
-        // Serial.println("Parameters extracted:");
-        // Serial.print("X: "); Serial.print(parameters[0]);
-        // Serial.print(", Y: "); Serial.print(parameters[1]);
-        // Serial.print(", F: "); Serial.println(parameters[2]);
         if (invalidCommand){
             return 0; // return to IDLE
         }
@@ -59,7 +55,7 @@ int GCodeParser::extractCommand(String tokens[], int tokenCount) {
 void GCodeParser::extractParameters(String tokens[], int tokenCount){
     parameters[0] = 0.0f; // Reset X
     parameters[1] = 0.0f; // Reset Y
-    previousFeedrate = parameters[2]; // capture lass feedrate 
+    int previousFeedrate = parameters[2]; // capture last feedrate 
 
     for (int i = 1; i < tokenCount; i++) {
             String token = tokens[i];
@@ -109,12 +105,6 @@ bool GCodeParser::ValidateParameters(float currentX, float currentY) {
     if (parameters[2] > 3000){
         parameters[2] = 3000;
     }
-    Serial.print("X: ");
-    Serial.println(parameters[0]);
-    Serial.print("Y: ");
-    Serial.println(parameters[1]);
-    Serial.print("F: ");
-    Serial.println(parameters[2]);
 
     if (invalidCommand){
         return false;
@@ -124,11 +114,11 @@ bool GCodeParser::ValidateParameters(float currentX, float currentY) {
 
 int GCodeParser::ExecuteCommand(const String& cmd) {
     invalidCommand = false;
-    command = cmd;
-    String tokens[10]; // fixed-size array for tokens
+    String tokens[10]; 
     int tokenCount = 0;
     CaseCapitalize();
-    tokenize(command, tokens, tokenCount);
+    tokenize(cmd, tokens, tokenCount);
     return extractCommand(tokens, tokenCount);
 }
+
 
