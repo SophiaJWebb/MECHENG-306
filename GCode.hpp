@@ -1,7 +1,5 @@
 #include <Arduino.h> // Gives you String, Serial, etc.
 
-// Optional: you can still use vectors if you have enough memory and include ArduinoSTL
-//#include <vector>
 #ifndef GCode 
 class GCodeParser {
   private:
@@ -22,3 +20,4 @@ class GCodeParser {
 
 
 #endif // GCODE_H
+
