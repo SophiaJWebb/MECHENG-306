@@ -5,9 +5,7 @@
 #ifndef GCode 
 class GCodeParser {
   private:
-    String command;
     float parameters[3] = {0.0f, 0.0f, 1000.0f}; // X, Y, Z parameters
-    float previousFeedrate = 0;
     bool invalidCommand = false;
 
   public:
@@ -21,5 +19,6 @@ class GCodeParser {
     bool ValidateParameters(float currentX, float currentY);
     const float* GetParameters() const { return parameters; }
 };
+
 
 #endif // GCODE_H
